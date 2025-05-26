@@ -472,7 +472,38 @@
                     const data = JSON.parse(message.payloadString);
                     
                     // 센서 데이터 업데이트
-                    updateSensorValues(data);
+                    if (data.temperature !== undefined) {
+                        document.getElementById('temperature').textContent = data.temperature.toFixed(1) + '°C';
+                    }
+                    if (data.humidity !== undefined) {
+                        document.getElementById('humidity').textContent = data.humidity.toFixed(1) + '%';
+                    }
+                    // 터치 센서 현재 값 업데이트
+                    if (data.touch1 !== undefined) {
+                        document.getElementById('touch1').textContent = data.touch1;
+                    }
+                    if (data.touch2 !== undefined) {
+                        document.getElementById('touch2').textContent = data.touch2;
+                    }
+                    if (data.touch3 !== undefined) {
+                        document.getElementById('touch3').textContent = data.touch3;
+                    }
+                    if (data.touch4 !== undefined) {
+                        document.getElementById('touch4').textContent = data.touch4;
+                    }
+                    // 터치 센서 누적 값 업데이트
+                    if (data.touch_count1 !== undefined) {
+                        document.getElementById('touch_count1').textContent = data.touch_count1;
+                    }
+                    if (data.touch_count2 !== undefined) {
+                        document.getElementById('touch_count2').textContent = data.touch_count2;
+                    }
+                    if (data.touch_count3 !== undefined) {
+                        document.getElementById('touch_count3').textContent = data.touch_count3;
+                    }
+                    if (data.touch_count4 !== undefined) {
+                        document.getElementById('touch_count4').textContent = data.touch_count4;
+                    }
                     
                     // RGB LED 상태 업데이트
                     if (data.rgb !== undefined && Array.isArray(data.rgb) && data.rgb.length === 3) {
