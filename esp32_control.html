@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP32 MQTT 제어 시스템</title>
+    <!-- MQTT 웹소켓 클라이언트 라이브러리 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
+    <!-- 차트 라이브러리 -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+        }
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .card {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .card h2 {
+            margin-top: 0;
+            color: #3498db;
+            font-size: 1.2em;
+        }
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        button {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        button:hover {
+            background: #2980b9;
+        }
+        input[type="range"], input[type="text"] {
+            width: 100%;
+            margin: 10px 0;
+        }
+        .chart-container {
+            width: 100%;
+            height: 300px;
+            margin-top: 20px;
+        }
+        .value-display {
+            font-size: 2em;
+            font-weight: bold;
+            text-align: center;
+            margin: 10px 0;
+        }
+        .touch-values {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin: 10px 0;
+            font-size: 1.2em;
+            text-align: center;
+        }
+        .rgb-controls {
+            margin: 10px 0;
+        }
+        .rgb-controls > div {
+            display: flex;
+            align-items: center;
+            margin: 5px 0;
+        }
+        .rgb-controls label {
+            width: 30px;
+            font-weight: bold;
+        }
+        .rgb-controls input[type="range"] {
+            flex-grow: 1;
+            margin: 0 10px;
+        }
+        .rgb-preview {
+            height: 30px;
+            border-radius: 5px;
+            margin: 10px 0;
+            border: 1px solid #ccc;
+            background-color: #000;
+        }
+        .preset-colors {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin-top: 10px;
+        }
+        .color-btn {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            border: 1px solid #ccc;
+            cursor: pointer;
+        }
+        .buzzer-controls > div {
+            margin: 8px 0;
+        }
+        .buzzer-controls label {
+            display: block;
+            margin-bottom: 3px;
+        }
+        .preset-notes {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin-top: 10px;
+        }
+        .note-btn {
+            padding: 5px 10px;
+            font-size: 0.9em;
+        }
+        .lcd-separator {
+            text-align: center;
+            margin: 10px 0;
+            color: #888;
+            font-style: italic;
+        }
+        .lcd-two-lines {
+            margin-top: 10px;
+        }
+        .lcd-two-lines input {
+            margin-bottom: 5px;
+            width: 100%;
+        }
+        .lcd-preview {
+            margin-top: 15px;
+            display: flex;
+            justify-content: center;
+        }
+        .lcd-screen {
+            background: #9ab9cc;
+            color: #000033;
+            border: 2px solid #666;
+            border-radius: 4px;
+            padding: 10px;
+            width: 100%;
+            max-width: 240px;
+            font-family: monospace;
+        }
+        .lcd-line {
+            height: 20px;
+            line-height: 20px;
+            white-space: nowrap;
+            overflow: hidden;
+            font-size: 14px;
+            letter-spacing: 1px;
+        }
+        .status {
+            padding: 10px;
+            margin-top: 20px;
+            background: #eee;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>ESP32 MQTT 제어 시스템</h1>
+        
+        <div class="status" id="connection-status">
+            연결 상태: 연결 중...
+        </div>
+        
+        <div class="dashboard">
+            <!-- 센서 데이터 표시 -->
+            <div class="card">
+                <h2>온도</h2>
+                <div class="value-display" id="temperature">--°C</div>
+            </div>
+            <div class="card">
+                <h2>습도</h2>
+                <div class="value-display" id="humidity">--%</div>
+            </div>
+            <div class="card">
+                <h2>터치 센서</h2>
+                <div class="touch-container">
+                    <div class="touch-section">
+                        <h3>현재 상태</h3>
+                        <div class="touch-values">
+                            <div class="touch-value-item">
+                                <div class="touch-label">터치 1</div>
+                                <div id="touch1" class="touch-state">0</div>
+                            </div>
+                            <div class="touch-value-item">
+                                <div class="touch-label">터치 2</div>
+                                <div id="touch2" class="touch-state">0</div>
+                            </div>
+                            <div class="touch-value-item">
+                                <div class="touch-label">터치 3</div>
+                                <div id="touch3" class="touch-state">0</div>
+                            </div>
+                            <div class="touch-value-item">
+                                <div class="touch-label">터치 4</div>
+                                <div id="touch4" class="touch-state">0</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="touch-section">
+                        <h3>누적 횟수</h3>
+                        <div class="touch-values">
+                            <div class="touch-value-item">
+                                <div class="touch-label">터치 1</div>
+                                <div id="touch_count1" class="touch-counter">0</div>
+                            </div>
+                            <div class="touch-value-item">
+                                <div class="touch-label">터치 2</div>
+                                <div id="touch_count2" class="touch-counter">0</div>
+                            </div>
+                            <div class="touch-value-item">
+                                <div class="touch-label">터치 3</div>
+                                <div id="touch_count3" class="touch-counter">0</div>
+                            </div>
+                            <div class="touch-value-item">
+                                <div class="touch-label">터치 4</div>
+                                <div id="touch_count4" class="touch-counter">0</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="chart-container">
+            <canvas id="sensorChart"></canvas>
+        </div>
+        
+        <div class="controls">
+            <div class="card">
+                <h2>서보 모터 제어</h2>
+                <input type="range" id="servo-control" min="0" max="180" value="90">
+                <div id="servo-value">90°</div>
+                <button id="servo-send">서보 위치 설정</button>
+            </div>
+            
+            <div class="card">
+                <h2>RGB LED 제어</h2>
+                <div class="rgb-controls">
+                    <div>
+                        <label for="rgb-red">R:</label>
+                        <input type="range" id="rgb-red" min="0" max="255" value="0">
+                        <span id="rgb-red-value">0</span>
+                    </div>
+                    <div>
+                        <label for="rgb-green">G:</label>
+                        <input type="range" id="rgb-green" min="0" max="255" value="0">
+                        <span id="rgb-green-value">0</span>
+                    </div>
+                    <div>
+                        <label for="rgb-blue">B:</label>
+                        <input type="range" id="rgb-blue" min="0" max="255" value="0">
+                        <span id="rgb-blue-value">0</span>
+                    </div>
+                    <div class="rgb-preview" id="rgb-preview">&nbsp;</div>
+                </div>
+                <button id="rgb-send">RGB LED 색상 설정</button>
+                <div class="preset-colors">
+                    <button class="color-btn" data-color="[255,0,0]" style="background-color: red;">&nbsp;</button>
+                    <button class="color-btn" data-color="[0,255,0]" style="background-color: green;">&nbsp;</button>
+                    <button class="color-btn" data-color="[0,0,255]" style="background-color: blue;">&nbsp;</button>
+                    <button class="color-btn" data-color="[255,255,0]" style="background-color: yellow;">&nbsp;</button>
+                    <button class="color-btn" data-color="[255,0,255]" style="background-color: magenta;">&nbsp;</button>
+                    <button class="color-btn" data-color="[0,255,255]" style="background-color: cyan;">&nbsp;</button>
+                    <button class="color-btn" data-color="[255,255,255]" style="background-color: white;">&nbsp;</button>
+                    <button class="color-btn" data-color="[0,0,0]" style="background-color: black;">&nbsp;</button>
+                </div>
+            </div>
+            
+            <div class="card">
+                <h2>부저 제어</h2>
+                <div class="buzzer-controls">
+                    <div>
+                        <label for="buzzer-freq">주파수 (Hz):</label>
+                        <input type="number" id="buzzer-freq" min="0" max="20000" value="440" step="10">
+                    </div>
+                    <div>
+                        <label for="buzzer-duration">지속시간 (ms):</label>
+                        <input type="number" id="buzzer-duration" min="0" max="5000" value="300" step="50">
+                    </div>
+                </div>
+                <button id="buzzer-send">부저 음 재생</button>
+                <button id="buzzer-stop">부저 중지</button>
+                <div class="preset-notes">
+                    <button class="note-btn" data-freq="262">C4</button>
+                    <button class="note-btn" data-freq="294">D4</button>
+                    <button class="note-btn" data-freq="330">E4</button>
+                    <button class="note-btn" data-freq="349">F4</button>
+                    <button class="note-btn" data-freq="392">G4</button>
+                    <button class="note-btn" data-freq="440">A4</button>
+                    <button class="note-btn" data-freq="494">B4</button>
+                </div>
+            </div>
+            
+            <div class="card">
+                <h2>LCD 제어</h2>
+                <div class="lcd-single-line">
+                    <input type="text" id="lcd-text" placeholder="LCD에 표시할 텍스트 입력 (자동 줄바꿈)">
+                    <button id="lcd-send">LCD에 표시</button>
+                </div>
+                <div class="lcd-separator">- 또는 -</div>
+                <div class="lcd-two-lines">
+                    <input type="text" id="lcd-line1" placeholder="첫 번째 줄 텍스트">
+                    <input type="text" id="lcd-line2" placeholder="두 번째 줄 텍스트">
+                    <button id="lcd-two-lines-send">두 줄 표시</button>
+                </div>
+                <div class="lcd-preview">
+                    <div class="lcd-screen">
+                        <div class="lcd-line" id="lcd-preview-line1">LCD 메시지</div>
+                        <div class="lcd-line" id="lcd-preview-line2"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // MQTT 설정
+        // 옵션 1: 로컬 Mosquitto 브로커 (로컬 네트워크 내에서만 작동)
+        // const MQTT_BROKER = "192.168.0.x"; // 로컬 컴퓨터 IP 주소로 변경
+        // const MQTT_PORT = 9001; // Mosquitto 웹소켓 포트
+        
+        // 옵션 2: 공개 HiveMQ 브로커 (인터넷 연결 필요, 초보자에게 권장)
+        const MQTT_BROKER = "broker.hivemq.com";
+        const MQTT_PORT = 8000; // HiveMQ 웹소켓 포트
+        
+        // 고유 클라이언트 ID 생성
+        const MQTT_CLIENT_ID = "web_client_" + Math.random().toString(16).substr(2, 8);
+        
+        // MQTT 토픽 설정 - ESP32와 동일한 토픽 사용
+        const MQTT_TOPIC_SENSOR = "myhome/livingroom/esp32/status"; // 상태 수신용 토픽
+        const MQTT_TOPIC_CONTROL = "myhome/livingroom/esp32/command"; // 명령 발송용 토픽
+        
+        let client;
+        let sensorChart;
+        let chartData = {
+            labels: [],
+            temperature: [],
+            humidity: [],
+            touch1: [],
+            touch2: []
+        };
+        
+        // 차트 초기화
+        function initChart() {
+            const ctx = document.getElementById('sensorChart').getContext('2d');
+            sensorChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: chartData.labels,
+                    datasets: [
+                        {
+                            label: '온도 (°C)',
+                            data: chartData.temperature,
+                            borderColor: 'rgb(255, 99, 132)',
+                            tension: 0.1
+                        },
+                        {
+                            label: '습도 (%)',
+                            data: chartData.humidity,
+                            borderColor: 'rgb(54, 162, 235)',
+                            tension: 0.1
+                        },
+                        {
+                            label: '터치 1',
+                            data: chartData.touch1,
+                            borderColor: 'rgb(255, 206, 86)',
+                            tension: 0.1
+                        },
+                        {
+                            label: '터치 2',
+                            data: chartData.touch2,
+                            borderColor: 'rgb(75, 192, 192)',
+                            tension: 0.1
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+        
+        // MQTT 연결 설정
+        function connectMQTT() {
+            client = new Paho.MQTT.Client(MQTT_BROKER, MQTT_PORT, MQTT_CLIENT_ID);
+            
+            // 콜백 설정
+            client.onConnectionLost = onConnectionLost;
+            client.onMessageArrived = onMessageArrived;
+            
+            // 연결
+            client.connect({
+                onSuccess: onConnect,
+                onFailure: onConnectFailure,
+                useSSL: false
+            });
+        }
+        
+        // 연결 성공
+        function onConnect() {
+            document.getElementById('connection-status').textContent = '연결 상태: 연결됨';
+            document.getElementById('connection-status').style.backgroundColor = '#d4edda';
+            
+            // 센서 토픽 구독
+            client.subscribe(MQTT_TOPIC_SENSOR);
+            console.log("MQTT 브로커에 연결 성공");
+        }
+        
+        // 연결 실패
+        function onConnectFailure(error) {
+            document.getElementById('connection-status').textContent = '연결 상태: 연결 실패 - ' + error.errorMessage;
+            document.getElementById('connection-status').style.backgroundColor = '#f8d7da';
+            console.log("MQTT 연결 실패:", error);
+            
+            // 5초 후 재연결
+            setTimeout(connectMQTT, 5000);
+        }
+        
+        // 연결 끊김
+        function onConnectionLost(responseObject) {
+            if (responseObject.errorCode !== 0) {
+                document.getElementById('connection-status').textContent = '연결 상태: 연결 끊김 - ' + responseObject.errorMessage;
+                document.getElementById('connection-status').style.backgroundColor = '#fff3cd';
+                console.log("MQTT 연결 끊김:", responseObject.errorMessage);
+                
+                // 3초 후 재연결
+                setTimeout(connectMQTT, 3000);
+            }
+        }
+        
+        // 메시지 수신
+        function onMessageArrived(message) {
+            console.log("메시지 수신:", message.destinationName, message.payloadString);
+            
+            if (message.destinationName === MQTT_TOPIC_SENSOR) {
+                try {
+                    const data = JSON.parse(message.payloadString);
+                    
+                    // 센서 데이터 업데이트
+                    updateSensorValues(data);
+                    
+                    // RGB LED 상태 업데이트
+                    if (data.rgb !== undefined && Array.isArray(data.rgb) && data.rgb.length === 3) {
+                        document.getElementById('rgb-red').value = data.rgb[0];
+                        document.getElementById('rgb-green').value = data.rgb[1];
+                        document.getElementById('rgb-blue').value = data.rgb[2];
+                        updateRgbPreview();
+                    }
+                    
+                    // 서보 상태 업데이트
+                    if (data.servo !== undefined) {
+                        document.getElementById('servo-control').value = data.servo;
+                        document.getElementById('servo-value').textContent = data.servo + '°';
+                    }
+                    
+                    // 차트 업데이트 (온도, 습도 데이터가 있는 경우에만)
+                    if (data.temperature !== undefined && data.humidity !== undefined) {
+                        updateChart(data);
+                    }
+                } catch (e) {
+                    console.error("데이터 파싱 오류:", e);
+                }
+            }
+        }
+        
+        // 차트 업데이트
+        function updateChart(data) {
+            // 시간 레이블 생성
+            const now = new Date();
+            const timeLabel = now.getHours() + ':' + 
+                             (now.getMinutes() < 10 ? '0' : '') + now.getMinutes() + ':' + 
+                             (now.getSeconds() < 10 ? '0' : '') + now.getSeconds();
+            
+            // 차트 데이터 업데이트 (최대 20개 포인트 유지)
+            chartData.labels.push(timeLabel);
+            chartData.temperature.push(data.temperature);
+            chartData.humidity.push(data.humidity);
+            
+            // 터치 센서 데이터 추가 (있는 경우에만)
+            if (data.touch1 !== undefined) {
+                chartData.touch1.push(data.touch1);
+            } else if (chartData.touch1.length > 0) {
+                // 데이터가 없는 경우 마지막 값 반복
+                chartData.touch1.push(chartData.touch1[chartData.touch1.length - 1]);
+            } else {
+                // 데이터가 아예 없는 경우 0
+                chartData.touch1.push(0);
+            }
+            
+            if (data.touch2 !== undefined) {
+                chartData.touch2.push(data.touch2);
+            } else if (chartData.touch2.length > 0) {
+                chartData.touch2.push(chartData.touch2[chartData.touch2.length - 1]);
+            } else {
+                chartData.touch2.push(0);
+            }
+            
+            // 최대 데이터 개수 제한
+            if (chartData.labels.length > 20) {
+                chartData.labels.shift();
+                chartData.temperature.shift();
+                chartData.humidity.shift();
+                chartData.touch1.shift();
+                chartData.touch2.shift();
+            }
+            
+            // 차트 업데이트
+            sensorChart.update();
+        }
+        
+        // MQTT 메시지 발행
+        function publishMessage(topic, message) {
+            if (!client || !client.isConnected()) {
+                alert("MQTT 브로커에 연결되어 있지 않습니다. 페이지를 새로고침하세요.");
+                return;
+            }
+            
+            const mqttMessage = new Paho.MQTT.Message(message);
+            mqttMessage.destinationName = topic;
+            client.send(mqttMessage);
+            console.log("메시지 발행:", topic, message);
+        }
+        
+        // RGB 미리보기 업데이트 함수
+        function updateRgbPreview() {
+            const r = document.getElementById('rgb-red').value;
+            const g = document.getElementById('rgb-green').value;
+            const b = document.getElementById('rgb-blue').value;
+            
+            document.getElementById('rgb-red-value').textContent = r;
+            document.getElementById('rgb-green-value').textContent = g;
+            document.getElementById('rgb-blue-value').textContent = b;
+            
+            const preview = document.getElementById('rgb-preview');
+            preview.style.backgroundColor = `rgb(${r}, ${g}, ${b})`;
+        }
+        
+        // 페이지 로드 시 실행
+        window.onload = function() {
+            // 차트 초기화
+            initChart();
+            
+            // MQTT 연결
+            connectMQTT();
+            
+            // 서보 모터 컨트롤 이벤트
+            document.getElementById('servo-control').addEventListener('input', function() {
+                document.getElementById('servo-value').textContent = this.value + '°';
+            });
+            
+            document.getElementById('servo-send').addEventListener('click', function() {
+                const angle = document.getElementById('servo-control').value;
+                publishMessage(MQTT_TOPIC_CONTROL, JSON.stringify({servo: parseInt(angle)}));
+            });
+            
+            // RGB LED 제어 이벤트
+            document.getElementById('rgb-red').addEventListener('input', updateRgbPreview);
+            document.getElementById('rgb-green').addEventListener('input', updateRgbPreview);
+            document.getElementById('rgb-blue').addEventListener('input', updateRgbPreview);
+            
+            // 초기 RGB 미리보기 업데이트
+            updateRgbPreview();
+            
+            // RGB LED 설정 버튼
+            document.getElementById('rgb-send').addEventListener('click', function() {
+                const r = parseInt(document.getElementById('rgb-red').value);
+                const g = parseInt(document.getElementById('rgb-green').value);
+                const b = parseInt(document.getElementById('rgb-blue').value);
+                publishMessage(MQTT_TOPIC_CONTROL, JSON.stringify({rgb: [r, g, b]}));
+            });
+            
+            // RGB 프리셋 색상 버튼
+            document.querySelectorAll('.color-btn').forEach(button => {
+                button.addEventListener('click', function() {
+                    const colorValues = JSON.parse(this.dataset.color);
+                    document.getElementById('rgb-red').value = colorValues[0];
+                    document.getElementById('rgb-green').value = colorValues[1];
+                    document.getElementById('rgb-blue').value = colorValues[2];
+                    updateRgbPreview();
+                    publishMessage(MQTT_TOPIC_CONTROL, JSON.stringify({rgb: colorValues}));
+                });
+            });
+            
+            // 부저 제어 이벤트
+            document.getElementById('buzzer-send').addEventListener('click', function() {
+                const freq = parseInt(document.getElementById('buzzer-freq').value);
+                const duration = parseInt(document.getElementById('buzzer-duration').value);
+                publishMessage(MQTT_TOPIC_CONTROL, JSON.stringify({
+                    buzzer: {
+                        freq: freq,
+                        duration: duration
+                    }
+                }));
+            });
+            
+            document.getElementById('buzzer-stop').addEventListener('click', function() {
+                publishMessage(MQTT_TOPIC_CONTROL, JSON.stringify({buzzer: 0}));
+            });
+            
+            // 부저 음악 노트 프리셋
+            document.querySelectorAll('.note-btn').forEach(button => {
+                button.addEventListener('click', function() {
+                    const freq = parseInt(this.dataset.freq);
+                    const duration = parseInt(document.getElementById('buzzer-duration').value);
+                    publishMessage(MQTT_TOPIC_CONTROL, JSON.stringify({
+                        buzzer: {
+                            freq: freq,
+                            duration: duration
+                        }
+                    }));
+                });
+            });
+            
+            // LCD 제어 이벤트 - 단일 줄 입력 버전
+            document.getElementById('lcd-send').addEventListener('click', function() {
+                const text = document.getElementById('lcd-text').value;
+                if (text) {
+                    // LCD 미리보기 업데이트
+                    updateLcdPreview(text);
+                    
+                    publishMessage(MQTT_TOPIC_CONTROL, JSON.stringify({lcd: text}));
+                }
+            });
+            
+            // LCD 이줄 입력 버전
+            document.getElementById('lcd-two-lines-send').addEventListener('click', function() {
+                const line1 = document.getElementById('lcd-line1').value;
+                const line2 = document.getElementById('lcd-line2').value;
+                
+                if (line1 || line2) {  // 하나라도 값이 있으면 전송
+                    // LCD 미리보기 업데이트
+                    updateLcdPreview(line1, line2);
+                    
+                    // "line1:line2" 형식으로 전송
+                    const lcdText = `${line1}:${line2}`;
+                    publishMessage(MQTT_TOPIC_CONTROL, JSON.stringify({lcd: lcdText}));
+                }
+            });
+            
+            // LCD 미리보기 업데이트 함수
+            function updateLcdPreview(line1, line2 = null) {
+                const preview1 = document.getElementById('lcd-preview-line1');
+                const preview2 = document.getElementById('lcd-preview-line2');
+                
+                if (line2 === null) {
+                    // 한 줄만 전달된 경우, 자동 줄바꿈 처리
+                    if (line1.includes('\n')) {
+                        const lines = line1.split('\n', 2);
+                        preview1.textContent = lines[0].substring(0, 16);
+                        preview2.textContent = lines.length > 1 ? lines[1].substring(0, 16) : '';
+                    } else if (line1.length > 16) {
+                        // 16자 이상이면 두번째 줄로 나누기
+                        preview1.textContent = line1.substring(0, 16);
+                        preview2.textContent = line1.substring(16, 32);
+                    } else {
+                        preview1.textContent = line1;
+                        preview2.textContent = '';
+                    }
+                } else {
+                    // 두 줄 따로 전달된 경우
+                    preview1.textContent = line1.substring(0, 16);
+                    preview2.textContent = line2.substring(0, 16);
+                }
+            }
+        };
+    </script>
+</body>
+</html>
