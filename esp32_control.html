@@ -163,18 +163,6 @@
             grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
             gap: 20px;
         }
-        
-        /* 부저 연주 UI는 가로 크기를 2배로 설정 */
-        .buzzer-card {
-            grid-column: span 2;
-        }
-        
-        /* 조그만 화면에서는 일반 카드로 설정 */
-        @media (max-width: 768px) {
-            .buzzer-card {
-                grid-column: span 1;
-            }
-        }
         .controls button { /* 컨트롤 카드 내 버튼 공통 스타일 */
             background: #3498db;
             color: white;
@@ -194,6 +182,27 @@
             width: 100%;
             margin: 12px 0; /* 상하 여백 증가 */
             cursor: pointer;
+        }
+        
+        /* 서보 입력 필드 스타일 */
+        .servo-direct-input {
+            margin: 15px 0 10px 0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .servo-direct-input label {
+            flex: 1;
+            margin-right: 10px;
+        }
+        
+        .servo-direct-input input {
+            width: 80px;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            text-align: center;
         }
         .controls input[type="text"], .controls input[type="number"] {
             width: 100%;
@@ -236,107 +245,22 @@
         .preset-colors {
             display: flex;
             flex-wrap: wrap;
-            gap: 10px;
+            gap: 8px; /* 프리셋 버튼 간 간격 */
             margin-top: 15px;
-            justify-content: center;
+            justify-content: center; /* 가운데 정렬 */
         }
-        .color-btn {
-            width: 30px;
-            height: 30px;
+        .color-btn { /* 프리셋 버튼 스타일 수정 */
+            width: 32px;
+            height: 32px;
             border-radius: 50%;
-            border: 1px solid #ccc;
-            cursor: pointer;
-            transition: transform 0.2s;
+            border: 2px solid #fff; /* 테두리 추가로 입체감 */
             box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-            padding: 0;
-        }
-        .color-btn:hover {
-            transform: scale(1.2);
-            border-color: #666;
-        }
-        
-        /* 서보 모터 프리셋 버튼 */
-        .preset-buttons {
-            display: flex;
-            justify-content: space-between;
-            margin: 10px 0;
-            gap: 5px;
-        }
-        .preset-btn {
-            flex: 1;
-            padding: 5px 0;
-            font-size: 0.9em;
-            background-color: #f0f0f0;
-            color: #333;
-            border: 1px solid #ddd;
-            border-radius: 4px;
             cursor: pointer;
-            transition: background-color 0.2s;
-        }
-        .preset-btn:hover {
-            background-color: #e0e0e0;
-        }
-        
-        /* 부저 컨트롤 스타일 */
-        .buzzer-container {
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-        }
-        .buzzer-controls {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-            align-items: center;
-            margin-bottom: 5px;
-        }
-        .buzzer-controls > div {
-            display: flex;
-            align-items: center;
-            gap: 5px;
-        }
-        .piano-keyboard {
-            display: flex;
-            flex-wrap: nowrap;
-            justify-content: center;
-            gap: 3px;
-            overflow-x: auto;
-            padding: 5px 0;
-        }
-        .piano-key.white-key {
-            background-color: #fff;
-            color: #000;
-            min-width: 35px;
-            flex: 1;
-            max-width: 50px;
-            text-align: center;
-            border-radius: 3px;
-            border: 1px solid #ddd;
-            padding: 8px 0;
-            transition: background-color 0.1s;
-        }
-        .piano-key.white-key:hover {
-            background-color: #f0f0f0;
-        }
-        .piano-key.white-key:active {
-            background-color: #e0e0e0;
-        }
-        #buzzer-stop-btn {
-            background-color: #e74c3c;
-        }
-        #buzzer-stop-btn:hover {
-            background-color: #c0392b;
-        }
-        #buzzer-play-btn {
-            background-color: #27ae60;
-        }
-        #buzzer-play-btn:hover {
-            background-color: #219653;
+            padding: 0; /* 내부 패딩 제거 */
         }
         .color-btn[data-color="[255,255,255]"] { /* 흰색 버튼 특별 처리 */
              border: 2px solid #ccc;
         }
-
 
         /* LCD 제어 */
         .lcd-single-line, .lcd-two-lines { margin-bottom: 15px; }
@@ -428,6 +352,11 @@
             background-color: #c0392b;
         }
 
+        /* 부저 연주 패널 */
+        .buzzer-panel {
+            grid-column: span 2; /* 두 칸 다 차지 */
+        }
+
     </style>
 </head>
 <body>
@@ -436,7 +365,7 @@
 
         <!-- 기기 정보 패널 -->
         <div class="device-info-panel">
-            <h2>기기 정보 (<span id="devices-count">0</span>개 발견됨)</h2>
+            <h2>기기 정보 (<span id="devices-count">0</span>)</h2>
             <div id="no-devices-message" class="no-devices">
                 MQTT 브로커에 연결하여 ESP32 기기를 검색 중입니다...
             </div>
@@ -478,13 +407,16 @@
         <div class="controls" id="device-controls">
             <div class="card">
                 <h2>서보 모터 제어</h2>
+                <!-- 슬라이더와 값 표시는 그대로 유지 -->
                 <input type="range" id="servo-control" min="0" max="180" value="90">
                 <div id="servo-value">90°</div>
-                <div class="preset-buttons">
-                    <button class="preset-btn" data-value="0">0°</button>
-                    <button class="preset-btn" data-value="90">90°</button>
-                    <button class="preset-btn" data-value="180">180°</button>
+                
+                <!-- 숫자 입력 필드 추가 -->
+                <div class="servo-direct-input">
+                    <label for="servo-input">각도 직접 입력 (0-180°):</label>
+                    <input type="number" id="servo-input" min="0" max="180" value="90" step="1">
                 </div>
+                
                 <button id="servo-send">서보 위치 설정</button>
             </div>
 
@@ -541,32 +473,33 @@
                 </div>
             </div>
 
-            <div class="card buzzer-card">
+            <div class="card buzzer-panel" style="grid-column: span 2;"> <!-- 가로로 2칸 차지하도록 설정 -->
                 <h2>부저 연주</h2>
-                <div class="buzzer-container">
-                    <div class="buzzer-controls">
-                        <div>
-                            <label for="buzzer-freq">주파수 (Hz):</label>
-                            <input type="number" id="buzzer-freq" min="20" max="20000" value="440" style="width: 80px;">
-                        </div>
-                        <div>
-                            <label for="buzzer-duration">길이 (ms):</label>
-                            <input type="number" id="buzzer-duration" min="50" max="5000" value="300" style="width: 80px;">
-                        </div>
-                        <button id="buzzer-play-btn">소리 재생</button>
-                        <button id="buzzer-stop-btn">부저 중지</button>
-                    </div>
-                    <div class="piano-keyboard">
-                        <button class="piano-key white-key" data-note="도" data-freq="262">도</button>
-                        <button class="piano-key white-key" data-note="레" data-freq="294">레</button>
-                        <button class="piano-key white-key" data-note="미" data-freq="330">미</button>
-                        <button class="piano-key white-key" data-note="파" data-freq="349">파</button>
-                        <button class="piano-key white-key" data-note="솔" data-freq="392">솔</button>
-                        <button class="piano-key white-key" data-note="라" data-freq="440">라</button>
-                        <button class="piano-key white-key" data-note="시" data-freq="494">시</button>
-                        <button class="piano-key white-key" data-note="도" data-freq="523">도</button>
-                    </div>
+                <div class="piano-keys">
+                    <button class="piano-key white-key" data-note="도" data-freq="262">도</button>
+                    <button class="piano-key white-key" data-note="레" data-freq="294">레</button>
+                    <button class="piano-key white-key" data-note="미" data-freq="330">미</button>
+                    <button class="piano-key white-key" data-note="파" data-freq="349">파</button>
+                    <button class="piano-key white-key" data-note="솔" data-freq="392">솔</button>
+                    <button class="piano-key white-key" data-note="라" data-freq="440">라</button>
+                    <button class="piano-key white-key" data-note="시" data-freq="494">시</button>
+                    <button class="piano-key white-key" data-note="도" data-freq="523">도</button>
                 </div>
+                
+                <!-- 주파수와 음 길이 설정 추가 -->
+                <div class="buzzer-custom-controls">
+                    <div class="buzzer-freq-control">
+                        <label for="buzzer-frequency">주파수 (Hz)</label>
+                        <input type="number" id="buzzer-frequency" min="20" max="20000" step="1" value="440">
+                    </div>
+                    <div class="buzzer-duration-control">
+                        <label for="buzzer-duration">음 길이 (ms)</label>
+                        <input type="number" id="buzzer-duration" min="50" max="5000" step="50" value="300">
+                    </div>
+                    <button id="buzzer-custom-play">음 연주</button>
+                </div>
+                
+                <button id="buzzer-stop-btn">부저 중지</button>
             </div>
         </div>
     </div>
@@ -634,6 +567,7 @@
             touchCount4: document.getElementById('touch_count4'),
             servoControl: document.getElementById('servo-control'),
             servoValue: document.getElementById('servo-value'),
+            servoInput: document.getElementById('servo-input'), // 서보 입력 필드 추가
             servoSend: document.getElementById('servo-send'),
             rgbRed: document.getElementById('rgb-red'),
             rgbGreen: document.getElementById('rgb-green'),
@@ -652,7 +586,10 @@
             lcdPreviewLine1: document.getElementById('lcd-preview-line1'),
             lcdPreviewLine2: document.getElementById('lcd-preview-line2'),
             pianoKeys: document.querySelectorAll('.piano-key'),
-            buzzerStopBtn: document.getElementById('buzzer-stop-btn')
+            buzzerStopBtn: document.getElementById('buzzer-stop-btn'),
+            buzzerFrequency: document.getElementById('buzzer-frequency'),
+            buzzerDuration: document.getElementById('buzzer-duration'),
+            buzzerCustomPlay: document.getElementById('buzzer-custom-play')
         };
 
         // --- 유틸리티 함수 ---
@@ -1006,26 +943,111 @@
                 selectDevice(this.value);
             });
 
-            // 서보 모터 슬라이더 제어
+            // 서보 제어를 위한 변수
+            let servoDebounceTimer = null; // 디바운싱을 위한 타이머
+            let currentServoValue = 90; // 현재 서보 값
+            let targetServoValue = 90; // 목표 서보 값
+            let servoAnimationFrame = null; // 애니메이션 프레임
+            
+            // 서보 값 전송 함수 (디바운싱 및 속도 제한 적용)
+            function sendServoValue(value) {
+                // 기존 타이머 취소
+                if (servoDebounceTimer) {
+                    clearTimeout(servoDebounceTimer);
+                }
+                
+                // 값 업데이트
+                targetServoValue = value;
+                
+                // 디바운싱 타이머 설정 (200ms)
+                servoDebounceTimer = setTimeout(() => {
+                    // 애니메이션 프레임이 있으면 취소
+                    if (servoAnimationFrame) {
+                        cancelAnimationFrame(servoAnimationFrame);
+                    }
+                    
+                    // 서보 애니메이션 시작
+                    animateServo();
+                }, 200); // 200ms 디바운싱
+            }
+            
+            // 서보 애니메이션 함수 (부드럽게 이동)
+            function animateServo() {
+                // 현재 값과 목표 값의 차이
+                const diff = targetServoValue - currentServoValue;
+                
+                // 이미 목표에 도달했으면 중단
+                if (Math.abs(diff) < 0.5) {
+                    currentServoValue = targetServoValue;
+                    publishMessage({ servo: currentServoValue });
+                    return;
+                }
+                
+                // 한 번에 최대 2도씩만 이동 (속도 제한)
+                const step = Math.sign(diff) * Math.min(2, Math.abs(diff));
+                currentServoValue += step;
+                
+                // 서보 값 전송
+                publishMessage({ servo: Math.round(currentServoValue) });
+                
+                // 다음 프레임 예약 (100ms 간격)
+                servoAnimationFrame = setTimeout(() => {
+                    animateServo();
+                }, 100);
+            }
+            
+            // 서보 슬라이더 이벤트 - 값 표시 및 입력 필드 동기화
             dom.servoControl.addEventListener('input', () => {
-                dom.servoValue.textContent = dom.servoControl.value + '°';
+                const value = parseInt(dom.servoControl.value);
+                dom.servoValue.textContent = value + '°';
+                dom.servoInput.value = value; // 입력 필드도 동기화
+                
+                // 디바운싱 적용하여 서보 값 전송
+                sendServoValue(value);
             });
             
-            // 서보 모터 설정 버튼
+            // 서보 입력 필드 이벤트 - 값 변경 시 슬라이더 동기화
+            dom.servoInput.addEventListener('input', () => {
+                let value = parseInt(dom.servoInput.value);
+                
+                // 범위 제한 (0-180)
+                if (isNaN(value)) {
+                    value = 90; // 유효하지 않은 값이면 기본값으로
+                } else {
+                    value = Math.max(0, Math.min(180, value));
+                }
+                
+                dom.servoInput.value = value; // 범위 제한된 값으로 업데이트
+                dom.servoControl.value = value; // 슬라이더 동기화
+                dom.servoValue.textContent = value + '°';
+                
+                // 입력 필드에서도 디바운싱 적용
+                sendServoValue(value);
+            });
+            
+            // 서보 위치 설정 버튼 이벤트 - 즉시 이동 (부드럽게 이동하지 않음)
             dom.servoSend.addEventListener('click', () => {
-                publishMessage({ servo: parseInt(dom.servoControl.value) });
+                const value = parseInt(dom.servoInput.value); // 입력 필드의 값 사용
+                
+                // 현재 값과 목표 값 업데이트 (애니메이션 없이 즉시 전송)
+                currentServoValue = value;
+                targetServoValue = value;
+                
+                // 디바운싱 타이머 취소
+                if (servoDebounceTimer) {
+                    clearTimeout(servoDebounceTimer);
+                    servoDebounceTimer = null;
+                }
+                
+                // 애니메이션 프레임 취소
+                if (servoAnimationFrame) {
+                    clearTimeout(servoAnimationFrame);
+                    servoAnimationFrame = null;
+                }
+                
+                // 즉시 서보 값 전송
+                publishMessage({ servo: value });
                 setButtonFeedback(dom.servoSend, '전송 완료!');
-            });
-            
-            // 서보 모터 프리셋 버튼
-            dom.servoPresetBtns.forEach(btn => {
-                btn.addEventListener('click', function() {
-                    const value = parseInt(this.dataset.value);
-                    dom.servoControl.value = value;
-                    dom.servoValue.textContent = value + '°';
-                    publishMessage({ servo: value });
-                    setButtonFeedback(this, '적용!');
-                });
             });
 
             [dom.rgbRed, dom.rgbGreen, dom.rgbBlue].forEach(slider => {
@@ -1087,44 +1109,20 @@
             });
 
 
-            // 부저 주파수 직접 설정 버튼
-            dom.buzzerPlayBtn.addEventListener('click', function() {
-                const freq = parseInt(dom.buzzerFreq.value);
-                const duration = parseInt(dom.buzzerDuration.value);
-                console.log(`부저 소리 재생: ${freq}Hz, ${duration}ms`);
-                publishMessage({
-                    buzzer: {
-                        freq: freq,
-                        duration: duration
-                    }
-                });
-                setButtonFeedback(this, '재생 중!');
-            });
-            
-            // 피아노 건반
             dom.pianoKeys.forEach(key => {
                 key.addEventListener('click', function() {
                     const freq = parseInt(this.dataset.freq);
-                    const duration = parseInt(dom.buzzerDuration.value); // 설정된 길이 사용
-                    console.log(`부저 소리 재생: ${this.dataset.note} (${freq}Hz)`);
-                    publishMessage({
-                        buzzer: {
-                            freq: freq,
-                            duration: duration
-                        }
-                    });
-                    setButtonFeedback(this);
+                    const duration = parseInt(dom.buzzerDuration.value);
+                    publishMessage({ buzzer: { freq: freq, duration: duration } });
                 });
             });
-            
-            // 부저 중지 버튼
+            dom.buzzerCustomPlay.addEventListener('click', function() {
+                const freq = parseInt(dom.buzzerFrequency.value);
+                const duration = parseInt(dom.buzzerDuration.value);
+                publishMessage({ buzzer: { freq: freq, duration: duration } });
+            });
             dom.buzzerStopBtn.addEventListener('click', () => {
-                publishMessage({ 
-                    buzzer: {
-                        freq: 0,
-                        duration: 0
-                    }
-                });
+                publishMessage({ buzzer: 0 }); // 주파수 0으로 정지
                 setButtonFeedback(dom.buzzerStopBtn, "정지됨", true, 500);
             });
         };
