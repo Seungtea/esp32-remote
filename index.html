@@ -24,6 +24,23 @@
             border-radius: 10px;
             box-shadow: 0 0 10px rgba(0,0,0,0.1);
         }
+        .device-selector {
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .device-selector label {
+            font-weight: bold;
+            color: #3498db;
+        }
+        .device-selector select {
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+            font-size: 1em;
+            min-width: 200px;
+        }
         h1 {
             color: #2c3e50;
             text-align: center;
@@ -185,6 +202,14 @@
 <body>
     <div class="container">
         <h1>ESP32 MQTT 제어 시스템</h1>
+        
+        <div class="device-selector">
+            <label for="device-select">기기 선택:</label>
+            <select id="device-select" onchange="selectDevice(this.value)">
+                <option value="">기기를 선택하세요</option>
+                <!-- 기기 목록은 자동으로 추가됩니다 -->
+            </select>
+        </div>
         
         <div class="status" id="connection-status">
             연결 상태: 연결 중...
@@ -355,9 +380,43 @@
         // 고유 클라이언트 ID 생성
         const MQTT_CLIENT_ID = "web_client_" + Math.random().toString(16).substr(2, 8);
         
-        // MQTT 토픽 설정 - ESP32와 동일한 토픽 사용
-        const MQTT_TOPIC_SENSOR = "myhome/livingroom/esp32/status"; // 상태 수신용 토픽
-        const MQTT_TOPIC_CONTROL = "myhome/livingroom/esp32/command"; // 명령 발송용 토픽
+        // MQTT 토픽 설정
+        let currentDevice = ""; // 현재 선택된 기기 ID
+        
+        // 기본적으로 모든 기기의 상태를 수신
+        const MQTT_TOPIC_SENSOR = "myhome/livingroom/+/status"; // +는 모든 기기
+        const MQTT_TOPIC_CONTROL = "myhome/livingroom/+/command"; // +는 모든 기기
+        
+        // 기기 목록을 저장할 객체
+        let devices = {};
+        
+        // 기기 선택 함수
+        function selectDevice(deviceId) {
+            currentDevice = deviceId;
+            updateDeviceSelection();
+        }
+        
+        // 기기 선택 UI 업데이트
+        function updateDeviceSelection() {
+            const select = document.getElementById('device-select');
+            
+            // 기기 목록 업데이트
+            const options = select.getElementsByTagName('option');
+            for (let i = options.length - 1; i > 0; i--) {
+                select.removeChild(options[i]);
+            }
+            
+            // 기기 목록 추가
+            Object.keys(devices).forEach(deviceId => {
+                const option = document.createElement('option');
+                option.value = deviceId;
+                option.textContent = deviceId;
+                select.appendChild(option);
+            });
+            
+            // 현재 선택된 기기 표시
+            select.value = currentDevice;
+        }
         
         let client;
         let sensorChart;
@@ -463,72 +522,102 @@
             }
         }
         
-        // 메시지 수신
         function onMessageArrived(message) {
-            console.log("메시지 수신:", message.destinationName, message.payloadString);
+    console.log("메시지 수신:", message.destinationName, message.payloadString);
+    
+    if (message.destinationName === MQTT_TOPIC_SENSOR) {
+        try {
+            const data = JSON.parse(message.payloadString);
             
-            if (message.destinationName === MQTT_TOPIC_SENSOR) {
-                try {
-                    const data = JSON.parse(message.payloadString);
-                    
-                    // 센서 데이터 업데이트
-                    if (data.temperature !== undefined) {
-                        document.getElementById('temperature').textContent = data.temperature.toFixed(1) + '°C';
-                    }
-                    if (data.humidity !== undefined) {
-                        document.getElementById('humidity').textContent = data.humidity.toFixed(1) + '%';
-                    }
-                    // 터치 센서 현재 값 업데이트
-                    if (data.touch1 !== undefined) {
-                        document.getElementById('touch1').textContent = data.touch1;
-                    }
-                    if (data.touch2 !== undefined) {
-                        document.getElementById('touch2').textContent = data.touch2;
-                    }
-                    if (data.touch3 !== undefined) {
-                        document.getElementById('touch3').textContent = data.touch3;
-                    }
-                    if (data.touch4 !== undefined) {
-                        document.getElementById('touch4').textContent = data.touch4;
-                    }
-                    // 터치 센서 누적 값 업데이트
-                    if (data.touch_count1 !== undefined) {
-                        document.getElementById('touch_count1').textContent = data.touch_count1;
-                    }
-                    if (data.touch_count2 !== undefined) {
-                        document.getElementById('touch_count2').textContent = data.touch_count2;
-                    }
-                    if (data.touch_count3 !== undefined) {
-                        document.getElementById('touch_count3').textContent = data.touch_count3;
-                    }
-                    if (data.touch_count4 !== undefined) {
-                        document.getElementById('touch_count4').textContent = data.touch_count4;
-                    }
-                    
-                    // RGB LED 상태 업데이트
-                    if (data.rgb !== undefined && Array.isArray(data.rgb) && data.rgb.length === 3) {
-                        document.getElementById('rgb-red').value = data.rgb[0];
-                        document.getElementById('rgb-green').value = data.rgb[1];
-                        document.getElementById('rgb-blue').value = data.rgb[2];
-                        updateRgbPreview();
-                    }
-                    
-                    // 서보 상태 업데이트
-                    if (data.servo !== undefined) {
-                        document.getElementById('servo-control').value = data.servo;
-                        document.getElementById('servo-value').textContent = data.servo + '°';
-                    }
-                    
-                    // 차트 업데이트 (온도, 습도 데이터가 있는 경우에만)
-                    if (data.temperature !== undefined && data.humidity !== undefined) {
-                        updateChart(data);
-                    }
-                } catch (e) {
-                    console.error("데이터 파싱 오류:", e);
+            // 센서 데이터 업데이트
+            if (data.temperature !== undefined) {
+                document.getElementById('temperature').textContent = data.temperature.toFixed(1) + '°C';
+            }
+            if (data.humidity !== undefined) {
+                document.getElementById('humidity').textContent = data.humidity.toFixed(1) + '%';
+            }
+            // 터치 센서 현재 값 업데이트
+            if (data.touch1 !== undefined) {
+                document.getElementById('touch1').textContent = data.touch1;
+            }
+            if (data.touch2 !== undefined) {
+                // RGB LED 상태 업데이트
+                if (data.rgb !== undefined && Array.isArray(data.rgb) && data.rgb.length === 3) {
+                    updateRGBSliders(...data.rgb);
                 }
             }
+        } catch (e) {
+            console.error('MQTT 메시지 처리 오류:', e);
         }
+    } else if (message.destinationName === MQTT_TOPIC_LCD) {
+        try {
+            const data = JSON.parse(message.payloadString);
+            const preview1 = document.getElementById('lcd-line1');
+            const preview2 = document.getElementById('lcd-line2');
+            
+            if (data.line1 !== undefined) {
+                const line1 = data.line1;
+                const line2 = data.line2 || '';
+                
+                if (line1.length > 32) {
+                    // 32자 이상이면 두 줄로 나누기
+                    preview1.textContent = line1.substring(0, 16);
+                    preview2.textContent = line1.substring(16, 32);
+                } else if (line1.length > 16) {
+                    // 16자 이상이면 두번째 줄로 나누기
+                    preview1.textContent = line1.substring(0, 16);
+                    preview2.textContent = line1.substring(16, 32);
+                } else {
+                    preview1.textContent = line1;
+                    preview2.textContent = '';
+                }
+            } else if (data.line1 !== undefined && data.line2 !== undefined) {
+                // 두 줄 따로 전달된 경우
+                preview1.textContent = line1.substring(0, 16);
+                preview2.textContent = line2.substring(0, 16);
+            }
+        } catch (e) {
+            console.error('LCD 메시지 처리 오류:', e);
+        }
+    }
+};
         
+        // 센서 데이터 업데이트
+        function updateSensorValues(data) {
+            // 온습도 값 업데이트
+            if (data.temperature !== undefined) {
+                document.getElementById('temperature').textContent = data.temperature.toFixed(1) + '°C';
+            }
+            if (data.humidity !== undefined) {
+                document.getElementById('humidity').textContent = data.humidity.toFixed(1) + '%';
+            }
+            // 터치 센서 현재 값 업데이트
+            if (data.touch1 !== undefined) {
+                document.getElementById('touch1').textContent = data.touch1;
+            }
+            if (data.touch2 !== undefined) {
+                document.getElementById('touch2').textContent = data.touch2;
+            }
+            if (data.touch3 !== undefined) {
+                document.getElementById('touch3').textContent = data.touch3;
+            }
+            if (data.touch4 !== undefined) {
+                document.getElementById('touch4').textContent = data.touch4;
+            }
+            // 터치 센서 누적 값 업데이트
+            if (data.touch_count1 !== undefined) {
+                document.getElementById('touch_count1').textContent = data.touch_count1;
+            }
+            if (data.touch_count2 !== undefined) {
+                document.getElementById('touch_count2').textContent = data.touch_count2;
+            }
+            if (data.touch_count3 !== undefined) {
+                document.getElementById('touch_count3').textContent = data.touch_count3;
+            }
+            if (data.touch_count4 !== undefined) {
+                document.getElementById('touch_count4').textContent = data.touch_count4;
+            }
+        }      
         // 차트 업데이트
         function updateChart(data) {
             // 시간 레이블 생성
