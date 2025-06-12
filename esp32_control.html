@@ -3,572 +3,147 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ESP32 MQTT 제어 시스템</title>
-    <!-- MQTT 웹소켓 클라이언트 라이브러리 -->
+    <title>ESP32 통합 제어 대시보드</title>
+    <!-- MQTT 웹소켓 클라이언트 라이브러리 (Paho) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
-    <!-- 차트 라이브러리 -->
+    <!-- 차트 라이브러리 (Chart.js) -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            margin: 0;
-            padding: 20px;
-            background-color: #f0f2f5; /* 약간 다른 배경색 */
-            color: #333;
-            line-height: 1.6;
-        }
-        .container {
-            max-width: 1200px;
-            margin: 20px auto; /* 위아래 여백 추가 */
-            background: #ffffff;
-            padding: 25px; /* 패딩 증가 */
-            border-radius: 12px; /* 더 둥근 모서리 */
-            box-shadow: 0 5px 15px rgba(0,0,0,0.08); /* 그림자 약간 조정 */
-        }
-
-        h1 {
-            color: #2c3e50;
-            text-align: center;
-            margin-bottom: 25px; /* 제목 아래 여백 */
-            font-size: 2em; /* 제목 크기 */
-        }
-
-        /* 기기 정보 패널 */
-        .device-info-panel {
-            padding: 20px;
-            background-color: #f8f9fa;
-            border-radius: 8px;
-            margin-bottom: 25px;
-            border: 1px solid #e9ecef;
-        }
-        .device-info-panel h2 {
-            margin-top: 0;
-            font-size: 1.4em; /* 소제목 크기 */
-            color: #3498db;
-            margin-bottom: 15px;
-        }
-        .no-devices {
-            color: #6c757d;
-            font-style: italic;
-            padding: 10px 0;
-            text-align: center;
-        }
-        .device-selector {
-            display: flex;
-            align-items: center;
-            gap: 15px; /* 간격 증가 */
-            margin-bottom: 15px;
-        }
-        .device-selector label {
-            font-weight: 600; /* 글꼴 두께 */
-            color: #495057;
-            font-size: 1.05em;
-        }
-        .device-selector select {
-            flex-grow: 1;
-            padding: 10px 12px; /* 패딩 조정 */
-            border-radius: 6px;
-            border: 1px solid #ced4da;
-            font-size: 1em;
-            background-color: #fff;
-        }
-        .selected-device-info {
-            margin-top: 15px;
-            padding-top: 15px;
-            border-top: 1px dashed #ced4da;
-        }
-        .selected-device-info p {
-            margin: 5px 0;
-            font-size: 0.95em; /* 글꼴 크기 조정 */
-            color: #454545;
-        }
-        .selected-device-info strong {
-            color: #34495e; /* 강조 색상 변경 */
-            min-width: 90px; /* 레이블 너비 증가 */
-            display: inline-block;
-        }
-        .status-badge {
-            padding: 4px 10px; /* 패딩 조정 */
-            border-radius: 12px; /* 더 둥글게 */
-            font-size: 0.85em; /* 글꼴 크기 조정 */
-            color: white;
-            margin-left: 8px;
-            font-weight: 500;
-        }
-        .status-badge.online { background-color: #28a745; }
-        .status-badge.offline { background-color: #dc3545; }
-        .status-badge.unknown { background-color: #6c757d; }
-
-
-        /* 연결 상태 메시지 */
-        .status {
-            padding: 12px 15px; /* 패딩 증가 */
-            margin-bottom: 25px;
-            border-radius: 6px;
-            text-align: center;
-            font-weight: 500;
-            font-size: 1.05em; /* 글꼴 크기 */
-            border-width: 1px;
-            border-style: solid;
-        }
+        body { font-family: 'Malgun Gothic', 'Segoe UI', sans-serif; margin: 0; padding: 20px; background-color: #f0f2f5; color: #333; }
+        .container { max-width: 1200px; margin: 20px auto; background: #ffffff; padding: 25px; border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.08); }
+        h1, h2, h3 { color: #2c3e50; text-align: center; }
+        h1 { font-size: 2.2em; margin-bottom: 25px; }
+        h2 { font-size: 1.5em; margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+        .section { background-color: #f8f9fa; border: 1px solid #e9ecef; padding: 20px; border-radius: 8px; margin-bottom: 25px; }
+        .grid-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 25px; }
+        .card { background: #ffffff; padding: 20px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.07); border: 1px solid #f0f0f0; }
+        .status { padding: 12px 15px; margin-bottom: 25px; border-radius: 6px; text-align: center; font-weight: 500; border-width: 1px; border-style: solid; }
         .status.connecting { background-color: #fff3cd; color: #856404; border-color: #ffeeba; }
         .status.connected { background-color: #d4edda; color: #155724; border-color: #c3e6cb; }
         .status.disconnected { background-color: #f8d7da; color: #721c24; border-color: #f5c6cb; }
-        .status.error { background-color: #f8d7da; color: #721c24; border-color: #f5c6cb; font-weight: bold; }
-
-        /* 대시보드 및 카드 */
-        .dashboard {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); /* 최소 너비 조정 */
-            gap: 25px; /* 간격 증가 */
-            margin-bottom: 25px;
-        }
-        .card {
-            background: #ffffff;
-            padding: 20px; /* 패딩 증가 */
-            border-radius: 10px; /* 모서리 둥글게 */
-            box-shadow: 0 4px 8px rgba(0,0,0,0.07); /* 그림자 조정 */
-            border: 1px solid #f0f0f0; /* 은은한 테두리 */
-        }
-        .card h2 {
-            margin-top: 0;
-            color: #3498db;
-            font-size: 1.3em; /* 카드 제목 크기 */
-            margin-bottom: 18px; /* 제목과 내용 사이 간격 */
-            padding-bottom: 10px; /* 제목 아래 구분선 위 간격 */
-            border-bottom: 1px solid #eee; /* 구분선 */
-        }
-
-        /* 센서 값 표시 */
-        .value-display {
-            font-size: 2.8em; /* 크기 약간 조정 */
-            font-weight: bold;
-            color: #2c3e50;
-            margin: 20px 0; /* 상하 여백 */
-            text-align: center; /* 가운데 정렬 */
-        }
-        .chart-container {
-            height: 380px; /* 차트 높이 증가 */
-            margin-bottom: 25px;
-            padding: 15px; /* 차트 주변 여백 */
-            background-color: #fff; /* 차트 카드 배경 */
-            border-radius: 10px;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.07);
-            border: 1px solid #f0f0f0;
-        }
-
-        /* 컨트롤 영역 */
-        .controls {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-            gap: 20px;
-        }
-        .controls button { /* 컨트롤 카드 내 버튼 공통 스타일 */
-            background: #3498db;
-            color: white;
-            border: none;
-            padding: 12px 18px; /* 패딩 증가 */
-            border-radius: 6px;
-            cursor: pointer;
-            transition: background 0.2s ease-out;
-            font-size: 1em; /* 버튼 글꼴 크기 */
-            width: 100%; /* 버튼 너비 채우기 */
-            margin-top: 15px; /* 위 요소와의 간격 */
-        }
-        .controls button:hover {
-            background: #2980b9;
-        }
-        .controls input[type="range"] {
-            width: 100%;
-            margin: 12px 0; /* 상하 여백 증가 */
-            cursor: pointer;
-        }
-        
-        /* 서보 입력 필드 스타일 */
-        .servo-direct-input {
-            margin: 15px 0 10px 0;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-        
-        .servo-direct-input label {
-            flex: 1;
-            margin-right: 10px;
-        }
-        
-        .servo-direct-input input {
-            width: 80px;
-            padding: 8px;
-            border: 1px solid #ccc;
-            border-radius: 5px;
-            text-align: center;
-        }
-        .controls input[type="text"], .controls input[type="number"] {
-            width: 100%;
-            padding: 10px;
-            margin: 8px 0 15px 0; /* 여백 조정 */
-            border: 1px solid #ccc;
-            border-radius: 5px;
-            box-sizing: border-box;
-            font-size: 1em;
-        }
-
-        /* RGB LED */
-        .rgb-controls { margin: 15px 0; }
-        .rgb-controls > div {
-            display: flex;
-            align-items: center;
-            margin-bottom: 10px; /* 각 슬라이더 간 간격 */
-        }
-        .rgb-controls label {
-            width: 25px; /* 레이블 너비 */
-            font-weight: 500;
-            margin-right: 5px;
-        }
-        .rgb-controls input[type="range"] {
-            flex-grow: 1;
-            margin: 0 8px; /* 좌우 여백 */
-        }
-        .rgb-controls span {
-            width: 35px; /* 값 표시 너비 */
-            text-align: right;
-            font-size: 0.95em;
-        }
-        .rgb-preview {
-            height: 35px; /* 미리보기 높이 증가 */
-            border-radius: 6px;
-            margin-top: 15px; /* 위 요소와의 간격 */
-            border: 1px solid #ddd;
-            background-color: #000;
-        }
-        .preset-colors {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px; /* 프리셋 버튼 간 간격 */
-            margin-top: 15px;
-            justify-content: center; /* 가운데 정렬 */
-        }
-        .color-btn { /* 프리셋 버튼 스타일 수정 */
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            border: 2px solid #fff; /* 테두리 추가로 입체감 */
-            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-            cursor: pointer;
-            padding: 0; /* 내부 패딩 제거 */
-        }
-        .color-btn[data-color="[255,255,255]"] { /* 흰색 버튼 특별 처리 */
-             border: 2px solid #ccc;
-        }
-
-        /* LCD 제어 */
-        .lcd-single-line, .lcd-two-lines { margin-bottom: 15px; }
-        .lcd-separator {
-            text-align: center;
-            margin: 15px 0; /* 구분자 여백 */
-            color: #999;
-            font-style: italic;
-            font-size: 0.9em;
-        }
-        #lcd-line1-input, #lcd-line2-input, #lcd-text {
-            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-            padding: 10px; /* 패딩 증가 */
-            border: 1px solid #ccc;
-            border-radius: 5px;
-            margin-bottom: 8px; /* 입력 필드 아래 여백 */
-            box-sizing: border-box;
-            width: 100%;
-        }
-
-        .lcd-preview {
-            margin-top: 20px; /* 미리보기 위 간격 */
-            display: flex;
-            justify-content: center;
-        }
-        .lcd-screen {
-            background-color: #2a3b4d;
-            color: #76ff03;
-            border: 3px solid #546e7a;
-            border-radius: 5px;
-            padding: 10px;
-            width: 100%;
-            max-width: 300px; /* 미리보기 너비 증가 */
-            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-            box-shadow: inset 0 0 10px rgba(0,0,0,0.4);
-        }
-        .lcd-line {
-            height: 24px; /* 줄 높이 증가 */
-            line-height: 24px;
-            white-space: pre;
-            overflow: hidden;
-            font-size: 16px; /* 글꼴 크기 증가 */
-            letter-spacing: 1.5px;
-        }
-
-        /* 부저 (피아노 건반) */
-        .piano-keys {
-            display: flex;
-            justify-content: center;
-            margin-bottom: 20px; /* 아래 버튼과의 간격 */
-            padding: 12px; /* 내부 여백 */
-            background-color: #4a4a4a; /* 어두운 배경 */
-            border-radius: 8px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-        }
-        .piano-key {
-            padding: 25px 12px; /* 버튼 크기 키우기 */
-            margin: 0 3px; /* 버튼 간 간격 */
-            border: 1px solid #222;
-            border-bottom-width: 3px; /* 아래쪽 테두리 두껍게 */
-            border-radius: 0 0 6px 6px;
-            cursor: pointer;
-            font-weight: bold;
-            transition: background-color 0.1s, transform 0.05s;
-            flex-grow: 1;
-            text-align: center;
-            font-size: 1.1em; /* 글꼴 크기 */
-        }
-        .piano-key.white-key {
-            background-color: #fdfdfd;
-            color: #333;
-            min-width: 45px;
-        }
-        .piano-key.white-key:hover {
-            background-color: #f0f0f0;
-        }
-        .piano-key.white-key:active {
-            background-color: #e0e0e0;
-            transform: translateY(1px); /* 눌리는 효과 */
-            border-bottom-width: 1px;
-        }
-        #buzzer-stop-btn {
-            display: block;
-            width: 60%; /* 너비 조정 */
-            margin: 0 auto; /* 가운데 정렬 */
-            background-color: #e74c3c;
-        }
-        #buzzer-stop-btn:hover {
-            background-color: #c0392b;
-        }
-
-        /* 부저 연주 패널 */
-        .buzzer-panel {
-            grid-column: span 2; /* 두 칸 다 차지 */
-        }
-
+        .device-selector { display: flex; align-items: center; gap: 15px; margin-bottom: 15px; }
+        .device-selector label { font-weight: 600; }
+        .device-selector select { flex-grow: 1; padding: 10px; border-radius: 6px; border: 1px solid #ced4da; font-size: 1em; }
+        .device-details p { margin: 5px 0; color: #454545; }
+        .device-details strong { color: #34495e; min-width: 90px; display: inline-block; }
+        .status-badge { padding: 4px 10px; border-radius: 12px; font-size: 0.85em; color: white; margin-left: 8px; }
+        .status-badge.online { background-color: #28a745; }
+        .status-badge.offline { background-color: #dc3545; }
+        .value-display { font-size: 2.8em; font-weight: bold; text-align: center; margin: 10px 0; }
+        .chart-container { height: 380px; margin-top: 25px; }
+        .controls { display: flex; flex-direction: column; gap: 15px; }
+        .controls .btn-group { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+        .btn { background: #3498db; color: white; border: none; padding: 12px 18px; border-radius: 6px; cursor: pointer; transition: background 0.2s; font-size: 1em; }
+        .btn:hover { background: #2980b9; }
+        input[type="range"] { width: 100%; cursor: pointer; }
+        input[type="text"], input[type="number"] { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; }
+        .rgb-preview { height: 35px; border-radius: 6px; border: 1px solid #ddd; margin-top: 10px; }
+        .piano-keys { display: flex; justify-content: center; gap: 5px; }
+        .piano-key { padding: 25px 12px; border: 1px solid #222; border-radius: 0 0 6px 6px; cursor: pointer; font-weight: bold; flex-grow: 1; text-align: center; background-color: #fdfdfd; }
+        .piano-key:active { background-color: #e0e0e0; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>ESP32 MQTT 제어 시스템</h1>
+        <h1>ESP32 통합 제어 대시보드</h1>
+        <div class="status" id="connection-status">연결 상태: 초기화 중...</div>
 
-        <!-- 기기 정보 패널 -->
-        <div class="device-info-panel">
-            <h2>기기 정보 (<span id="devices-count">0</span>)</h2>
-            <div id="no-devices-message" class="no-devices">
-                MQTT 브로커에 연결하여 ESP32 기기를 검색 중입니다...
-            </div>
+        <div class="section">
+            <h2>기기 선택 (<span id="device-count">0</span>)</h2>
             <div class="device-selector">
-                <label for="device-select">기기 선택:</label>
-                <select id="device-select"> <!-- onchange는 JS에서 동적으로 추가 -->
-                    <option value="">-- 기기를 선택하세요 --</option>
-                </select>
+                <label for="device-select">제어할 기기:</label>
+                <select id="device-select"><option value="">-- 감지된 기기 없음 --</option></select>
             </div>
-            <div class="selected-device-info" id="device-details" style="display:none;">
-                <p><strong>ID:</strong> <span id="current-device-id">-</span></p>
-                <p><strong>IP 주소:</strong> <span id="current-device-ip">-</span></p>
-                <p><strong>상태:</strong> <span id="current-device-status" class="status-badge unknown">확인 중</span></p>
-                <p><strong>센서 토픽:</strong> <span id="current-topic-sensor">-</span></p>
-                <p><strong>제어 토픽:</strong> <span id="current-topic-control">-</span></p>
+            <div class="device-details" id="device-details-panel" style="display:none;">
+                <p><strong>ID:</strong> <span id="details-id">-</span> <span id="details-status" class="status-badge"></span></p>
+                <p><strong>IP 주소:</strong> <span id="details-ip">-</span></p>
+                <p><strong>모드:</strong> <span id="details-mode">-</span></p>
             </div>
         </div>
 
-        <div class="status" id="connection-status">
-            연결 상태: 초기화 중...
-        </div>
-
-        <div class="dashboard">
-            <!-- 센서 데이터 표시 -->
-            <div class="card">
-                <h2>온도</h2>
-                <div class="value-display" id="temperature">--°C</div>
-            </div>
-            <div class="card">
-                <h2>습도</h2>
-                <div class="value-display" id="humidity">--%</div>
-            </div>
+        <div class="grid-container">
+            <div class="card"><h2>온도</h2><div class="value-display" id="temperature">--°C</div></div>
+            <div class="card"><h2>습도</h2><div class="value-display" id="humidity">--%</div></div>
         </div>
 
         <div class="chart-container">
             <canvas id="sensorChart"></canvas>
         </div>
 
-        <div class="controls" id="device-controls">
+        <div class="grid-container" id="controls-container" style="display:none;">
             <div class="card">
-                <h2>서보 모터 제어</h2>
-                <!-- 슬라이더와 값 표시는 그대로 유지 -->
-                <input type="range" id="servo-control" min="0" max="180" value="90">
-                <div id="servo-value">90°</div>
-                
-                <!-- 숫자 입력 필드 추가 -->
-                <div class="servo-direct-input">
-                    <label for="servo-input">각도 직접 입력 (0-180°):</label>
-                    <input type="number" id="servo-input" min="0" max="180" value="90" step="1">
+                <h2>시스템 모드</h2>
+                <div class="controls btn-group">
+                    <button id="mode-auto-btn" class="btn">자동 모드</button>
+                    <button id="mode-manual-btn" class="btn">수동 모드</button>
                 </div>
-                
-                <button id="servo-send">서보 위치 설정</button>
             </div>
-
             <div class="card">
+                <h2>창문 제어</h2>
+                <div class="controls btn-group">
+                    <button id="window-open-btn" class="btn">열기</button>
+                    <button id="window-close-btn" class="btn">닫기</button>
+                </div>
+            </div>
+            <div class="card" style="grid-column: span 2;">
                 <h2>RGB LED 제어</h2>
-                <div class="rgb-controls">
-                    <div>
-                        <label for="rgb-red">R:</label>
-                        <input type="range" id="rgb-red" min="0" max="255" value="0">
-                        <span id="rgb-red-value">0</span>
-                    </div>
-                    <div>
-                        <label for="rgb-green">G:</label>
-                        <input type="range" id="rgb-green" min="0" max="255" value="0">
-                        <span id="rgb-green-value">0</span>
-                    </div>
-                    <div>
-                        <label for="rgb-blue">B:</label>
-                        <input type="range" id="rgb-blue" min="0" max="255" value="0">
-                        <span id="rgb-blue-value">0</span>
-                    </div>
-                    <div class="rgb-preview" id="rgb-preview"> </div>
-                </div>
-                <button id="rgb-send">RGB LED 색상 설정</button>
-                <div class="preset-colors">
-                    <button class="color-btn" data-color="[255,0,0]" style="background-color: red;"> </button>
-                    <button class="color-btn" data-color="[0,255,0]" style="background-color: green;"> </button>
-                    <button class="color-btn" data-color="[0,0,255]" style="background-color: blue;"> </button>
-                    <button class="color-btn" data-color="[255,255,0]" style="background-color: yellow;"> </button>
-                    <button class="color-btn" data-color="[255,0,255]" style="background-color: magenta;"> </button>
-                    <button class="color-btn" data-color="[0,255,255]" style="background-color: cyan;"> </button>
-                    <button class="color-btn" data-color="[255,255,255]" style="background-color: white;"> </button>
-                    <button class="color-btn" data-color="[0,0,0]" style="background-color: black;"> </button>
+                <div class="controls">
+                    <div>R: <input type="range" id="rgb-red" min="0" max="255" value="0"> <span id="rgb-red-value">0</span></div>
+                    <div>G: <input type="range" id="rgb-green" min="0" max="255" value="0"> <span id="rgb-green-value">0</span></div>
+                    <div>B: <input type="range" id="rgb-blue" min="0" max="255" value="0"> <span id="rgb-blue-value">0</span></div>
+                    <div class="rgb-preview" id="rgb-preview"></div>
                 </div>
             </div>
-
-            <div class="card">
+            <div class="card" style="grid-column: span 2;">
                 <h2>LCD 제어</h2>
-                <div class="lcd-single-line">
-                    <input type="text" id="lcd-text" placeholder="텍스트 입력 (자동 줄바꿈, 최대 32자)">
-                    <button id="lcd-send">LCD에 표시</button>
-                </div>
-                <div class="lcd-separator">- 또는 -</div>
-                <div class="lcd-two-lines">
-                    <input type="text" id="lcd-line1-input" placeholder="첫 번째 줄 (최대 16자)">
-                    <input type="text" id="lcd-line2-input" placeholder="두 번째 줄 (최대 16자)">
-                    <button id="lcd-two-lines-send">두 줄 표시</button>
-                </div>
-                <div class="lcd-preview">
-                    <div class="lcd-screen">
-                        <div class="lcd-line" id="lcd-preview-line1">LCD Line 1</div>
-                        <div class="lcd-line" id="lcd-preview-line2">LCD Line 2</div>
-                    </div>
+                <div class="controls">
+                    <input type="text" id="lcd-text" placeholder="표시할 텍스트 입력 (최대 32자)">
+                    <button id="lcd-send-btn" class="btn">LCD에 전송</button>
                 </div>
             </div>
-
-            <div class="card buzzer-panel" style="grid-column: span 2;"> <!-- 가로로 2칸 차지하도록 설정 -->
+            <div class="card" style="grid-column: span 2;">
                 <h2>부저 연주</h2>
                 <div class="piano-keys">
-                    <button class="piano-key white-key" data-note="도" data-freq="262">도</button>
-                    <button class="piano-key white-key" data-note="레" data-freq="294">레</button>
-                    <button class="piano-key white-key" data-note="미" data-freq="330">미</button>
-                    <button class="piano-key white-key" data-note="파" data-freq="349">파</button>
-                    <button class="piano-key white-key" data-note="솔" data-freq="392">솔</button>
-                    <button class="piano-key white-key" data-note="라" data-freq="440">라</button>
-                    <button class="piano-key white-key" data-note="시" data-freq="494">시</button>
-                    <button class="piano-key white-key" data-note="도" data-freq="523">도</button>
+                    <button class="piano-key" data-freq="262">도</button>
+                    <button class="piano-key" data-freq="294">레</button>
+                    <button class="piano-key" data-freq="330">미</button>
+                    <button class="piano-key" data-freq="349">파</button>
+                    <button class="piano-key" data-freq="392">솔</button>
+                    <button class="piano-key" data-freq="440">라</button>
+                    <button class="piano-key" data-freq="494">시</button>
                 </div>
-                
-                <!-- 주파수와 음 길이 설정 추가 -->
-                <div class="buzzer-custom-controls">
-                    <div class="buzzer-freq-control">
-                        <label for="buzzer-frequency">주파수 (Hz)</label>
-                        <input type="number" id="buzzer-frequency" min="20" max="20000" step="1" value="440">
-                    </div>
-                    <div class="buzzer-duration-control">
-                        <label for="buzzer-duration">음 길이 (ms)</label>
-                        <input type="number" id="buzzer-duration" min="50" max="5000" step="50" value="300">
-                    </div>
-                    <button id="buzzer-custom-play">음 연주</button>
-                </div>
-                
-                <button id="buzzer-stop-btn">부저 중지</button>
             </div>
         </div>
     </div>
 
     <script>
-        // MQTT 설정
+        // --- 설정 ---
         const MQTT_BROKER = "broker.hivemq.com";
-        const MQTT_PORT = 8884; // HiveMQ 보안 웹소켓 포트(SSL)
-        const MQTT_CLIENT_ID = "web_client_" + Math.random().toString(36).substring(2, 10); // 더 랜덤한 ID
-        const MQTT_TOPIC_SENSOR_WILDCARD = "myhome/livingroom/+/status";
+        const MQTT_PORT = 8884;
+        const MQTT_CLIENT_ID = "dashboard_client_" + Math.random().toString(16).substring(2, 10);
+        const MQTT_TOPIC_WILDCARD = "myhome/livingroom/+/status";
+        const MAX_CHART_POINTS = 30;
+        const DEVICE_TIMEOUT = 35; // 35초간 메시지 없으면 오프라인 간주
 
-        let currentDevice = ""; // 현재 선택된 장치 ID
-        let devices = {}; // 발견된 장치 목록 { deviceId: { ...data } }
-        let client; // MQTT 클라이언트 객체
-        let sensorChart; // Chart.js 객체
-
-        // 차트 데이터 및 설정
-        const MAX_CHART_POINTS = 30; // 차트에 표시할 최대 데이터 포인트 수
-        let chartData = {
-            labels: [],
-            datasets: [
-                {
-                    label: '온도 (°C)',
-                    data: [],
-                    borderColor: 'rgba(255, 99, 132, 1)',
-                    backgroundColor: 'rgba(255, 99, 132, 0.2)',
-                    tension: 0.2, // 약간의 곡선
-                    fill: true,
-                    pointRadius: 4,
-                    pointHoverRadius: 6,
-                    borderWidth: 2
-                },
-                {
-                    label: '습도 (%)',
-                    data: [],
-                    borderColor: 'rgba(54, 162, 235, 1)',
-                    backgroundColor: 'rgba(54, 162, 235, 0.2)',
-                    tension: 0.2,
-                    fill: true,
-                    pointRadius: 4,
-                    pointHoverRadius: 6,
-                    borderWidth: 2
-                }
-            ]
-        };
+        // --- 전역 변수 ---
+        let client;
+        let sensorChart;
+        let devices = {}; // { "student123": { ip: "...", temp: 25.5, ... }, ... }
+        let currentDevice = "";
 
         // --- DOM 요소 캐싱 ---
         const dom = {
+            status: document.getElementById('connection-status'),
+            deviceCount: document.getElementById('device-count'),
             deviceSelect: document.getElementById('device-select'),
-            deviceDetails: document.getElementById('device-details'),
-            currentDeviceId: document.getElementById('current-device-id'),
-            currentTopicSensor: document.getElementById('current-topic-sensor'),
-            currentTopicControl: document.getElementById('current-topic-control'),
-            currentDeviceIp: document.getElementById('current-device-ip'),
-            currentDeviceStatus: document.getElementById('current-device-status'),
-            noDevicesMessage: document.getElementById('no-devices-message'),
-            devicesCount: document.getElementById('devices-count'),
-            deviceControls: document.getElementById('device-controls'),
-            connectionStatus: document.getElementById('connection-status'),
+            detailsPanel: document.getElementById('device-details-panel'),
+            detailsId: document.getElementById('details-id'),
+            detailsIp: document.getElementById('details-ip'),
+            detailsMode: document.getElementById('details-mode'),
+            detailsStatus: document.getElementById('details-status'),
+            controlsContainer: document.getElementById('controls-container'),
             temperature: document.getElementById('temperature'),
             humidity: document.getElementById('humidity'),
-            touchCount1: document.getElementById('touch_count1'),
-            touchCount2: document.getElementById('touch_count2'),
-            touchCount3: document.getElementById('touch_count3'),
-            touchCount4: document.getElementById('touch_count4'),
-            servoControl: document.getElementById('servo-control'),
-            servoValue: document.getElementById('servo-value'),
-            servoInput: document.getElementById('servo-input'), // 서보 입력 필드 추가
-            servoSend: document.getElementById('servo-send'),
             rgbRed: document.getElementById('rgb-red'),
             rgbGreen: document.getElementById('rgb-green'),
             rgbBlue: document.getElementById('rgb-blue'),
@@ -576,554 +151,219 @@
             rgbGreenValue: document.getElementById('rgb-green-value'),
             rgbBlueValue: document.getElementById('rgb-blue-value'),
             rgbPreview: document.getElementById('rgb-preview'),
-            rgbSend: document.getElementById('rgb-send'),
-            presetColors: document.querySelectorAll('.color-btn'),
             lcdText: document.getElementById('lcd-text'),
-            lcdSend: document.getElementById('lcd-send'),
-            lcdLine1Input: document.getElementById('lcd-line1-input'),
-            lcdLine2Input: document.getElementById('lcd-line2-input'),
-            lcdTwoLinesSend: document.getElementById('lcd-two-lines-send'),
-            lcdPreviewLine1: document.getElementById('lcd-preview-line1'),
-            lcdPreviewLine2: document.getElementById('lcd-preview-line2'),
-            pianoKeys: document.querySelectorAll('.piano-key'),
-            buzzerStopBtn: document.getElementById('buzzer-stop-btn'),
-            buzzerFrequency: document.getElementById('buzzer-frequency'),
-            buzzerDuration: document.getElementById('buzzer-duration'),
-            buzzerCustomPlay: document.getElementById('buzzer-custom-play')
         };
 
-        // --- 유틸리티 함수 ---
-        function updateElementText(element, text, defaultValue = '-') {
-            if (element) element.textContent = text !== undefined && text !== null ? text : defaultValue;
-        }
-
-        function setButtonFeedback(button, text = '전송됨!', success = true, duration = 1000) {
-            const originalText = button.innerHTML;
-            button.innerHTML = text;
-            button.classList.toggle('btn-success', success); // 성공/실패 스타일링 (CSS 필요)
-            button.disabled = true;
-            setTimeout(() => {
-                button.innerHTML = originalText;
-                button.classList.remove('btn-success');
-                button.disabled = false;
-            }, duration);
-        }
-
-
-        // --- UI 업데이트 함수 ---
-        function updateConnectionStatus(message, isConnected, isError = false) {
-            updateElementText(dom.connectionStatus, message);
-            dom.connectionStatus.className = 'status ' + (isError ? 'error' : (isConnected === null ? 'connecting' : (isConnected ? 'connected' : 'disconnected')));
-        }
-
-        function updateSelectedDeviceUI() {
-            const device = devices[currentDevice];
-            if (currentDevice && device) {
-                updateElementText(dom.currentDeviceId, currentDevice);
-                updateElementText(dom.currentDeviceIp, device.ip);
-                updateElementText(dom.currentDeviceStatus, device.online ? '온라인' : '오프라인');
-                dom.currentDeviceStatus.className = 'status-badge ' + (device.online ? 'online' : 'offline');
-                updateElementText(dom.currentTopicSensor, `myhome/livingroom/${currentDevice}/status`);
-                updateElementText(dom.currentTopicControl, `myhome/livingroom/${currentDevice}/command`);
-                dom.deviceDetails.style.display = 'block';
-                dom.deviceControls.style.display = 'grid';
-
-                if (device.rgb) {
-                    dom.rgbRed.value = device.rgb[0];
-                    dom.rgbGreen.value = device.rgb[1];
-                    dom.rgbBlue.value = device.rgb[2];
-                    updateRgbPreview();
-                }
-                if (device.servo !== undefined && device.servo !== -1) { // -1은 알수없음으로 가정
-                    dom.servoControl.value = device.servo;
-                    updateElementText(dom.servoValue, device.servo + '°');
-                }
-            } else {
-                updateElementText(dom.currentDeviceId, '-');
-                updateElementText(dom.currentDeviceIp, '-');
-                updateElementText(dom.currentDeviceStatus, '선택 안됨');
-                dom.currentDeviceStatus.className = 'status-badge unknown';
-                updateElementText(dom.currentTopicSensor, '-');
-                updateElementText(dom.currentTopicControl, '-');
-                dom.deviceDetails.style.display = 'none';
-                dom.deviceControls.style.display = 'none';
-            }
-        }
-
-        function updateDeviceDropdown() {
-            const currentVal = dom.deviceSelect.value;
-            dom.deviceSelect.innerHTML = '<option value="">-- 기기를 선택하세요 --</option>'; // 초기 옵션
-            let deviceCount = 0;
-            Object.keys(devices).sort().forEach(id => {
-                const device = devices[id];
-                const option = document.createElement('option');
-                option.value = id;
-                option.textContent = `${id} (${device.ip || 'IP ?'}) - ${device.online ? '온라인' : '오프라인'}`;
-                dom.deviceSelect.appendChild(option);
-                deviceCount++;
+        // --- MQTT 로직 ---
+        function connectMQTT() {
+            dom.status.textContent = `MQTT 브로커(${MQTT_BROKER})에 연결 중...`;
+            dom.status.className = 'status connecting';
+            client = new Paho.MQTT.Client(MQTT_BROKER, MQTT_PORT, MQTT_CLIENT_ID);
+            client.onConnectionLost = onConnectionLost;
+            client.onMessageArrived = onMessageArrived;
+            client.connect({
+                onSuccess: onConnect,
+                onFailure: (res) => { dom.status.textContent = `연결 실패: ${res.errorMessage}`; dom.status.className = 'status disconnected'; setTimeout(connectMQTT, 5000); },
+                useSSL: true,
+                timeout: 10,
+                keepAliveInterval: 30
             });
-            dom.devicesCount.textContent = `${deviceCount}개 발견됨`;
-            dom.noDevicesMessage.style.display = deviceCount === 0 ? 'block' : 'none';
-            if (devices[currentVal]) { // 이전 선택 유지 시도
-                dom.deviceSelect.value = currentVal;
-            } else if (deviceCount === 1 && !currentDevice) { // 첫 기기 자동 선택
-                dom.deviceSelect.value = Object.keys(devices)[0];
-                selectDevice(dom.deviceSelect.value);
+        }
+
+        function onConnect() {
+            dom.status.textContent = 'MQTT 브로커에 연결되었습니다.';
+            dom.status.className = 'status connected';
+            client.subscribe(MQTT_TOPIC_WILDCARD);
+            console.log(`구독 시작: ${MQTT_TOPIC_WILDCARD}`);
+        }
+
+        function onConnectionLost(responseObject) {
+            if (responseObject.errorCode !== 0) {
+                dom.status.textContent = 'MQTT 연결이 끊어졌습니다. 재연결 시도 중...';
+                dom.status.className = 'status disconnected';
+            }
+            Object.values(devices).forEach(d => d.online = false);
+            updateDeviceDropdown();
+            setTimeout(connectMQTT, 3000);
+        }
+
+        function onMessageArrived(message) {
+            try {
+                const topic = message.destinationName;
+                const payload = JSON.parse(message.payloadString);
+                const deviceId = payload.device_id || topic.split('/')[2];
+
+                devices[deviceId] = { ...devices[deviceId], ...payload, online: true, lastSeen: Date.now() };
+                
+                updateDeviceDropdown();
+
+                if (deviceId === currentDevice) {
+                    updateUIForSelectedDevice();
+                    updateChart(payload);
+                }
+            } catch (e) {
+                console.error("메시지 처리 오류:", e);
             }
         }
-        
-        function selectDevice(deviceId) {
-            if (!deviceId) { // "-- 기기를 선택하세요 --" 선택 시
-                currentDevice = "";
-                updateSelectedDeviceUI();
-                updateSensorValues({}); // 센서 값 초기화
-                clearChart();
+
+        function publishCommand(payload) {
+            if (!client || !client.isConnected() || !currentDevice) {
+                alert("기기를 먼저 선택해주세요.");
                 return;
             }
-            currentDevice = deviceId;
-            console.log("Selected device:", currentDevice);
-            updateSelectedDeviceUI();
-            if (devices[currentDevice]) {
-                updateSensorValues(devices[currentDevice]);
-                 // 기기 변경 시, 해당 기기의 최신 상태를 요청하여 차트를 업데이트 할 수 있음
-                clearChart(); // 이전 기기 차트 데이터 지우기
-                if (client && client.isConnected()) { // 연결되어 있을 때만 요청
-                    publishMessage({ status: "request" }); // 새 기기의 현재 상태 요청
-                }
-            } else {
-                updateSensorValues({});
-                clearChart();
-            }
+            const topic = `myhome/livingroom/${currentDevice}/command`;
+            const message = new Paho.MQTT.Message(JSON.stringify(payload));
+            message.destinationName = topic;
+            client.send(message);
         }
 
-
-        function addDevice(deviceId, data) {
-            const isNew = !devices[deviceId];
-            devices[deviceId] = {
-                ...devices[deviceId], // 기존 데이터 (예: 차트용 이력) 유지
-                ...data, // 새 데이터로 덮어쓰기 (ip, online, 현재 센서값)
-                lastSeen: data.timestamp || Math.floor(Date.now() / 1000),
-                online: true // 메시지 받으면 온라인으로 간주
-            };
-
-            if (isNew) console.log(`New device added: ${deviceId}`);
-            updateDeviceDropdown(); // 드롭다운 목록 갱신
-
-            if (deviceId === currentDevice) {
-                updateSelectedDeviceUI(); // 현재 선택된 기기 정보 업데이트
-            }
-        }
-
-        function checkDevicesStatus() {
-            const now = Math.floor(Date.now() / 1000);
-            const timeout = 45; // ESP32 전송 주기(5초)의 넉넉한 배수, keepalive(30초) 보다 크게
-            let changed = false;
-            Object.keys(devices).forEach(id => {
-                if (devices[id].online && (now - devices[id].lastSeen > timeout)) {
-                    devices[id].online = false;
-                    console.log(`Device ${id} marked as offline.`);
-                    changed = true;
-                    if (id === currentDevice) {
-                        updateSelectedDeviceUI();
-                    }
-                }
+        // --- UI 및 데이터 관리 ---
+        function updateDeviceDropdown() {
+            const onlineDevices = Object.values(devices).filter(d => d.online);
+            dom.deviceCount.textContent = onlineDevices.length;
+            
+            const prevSelected = dom.deviceSelect.value;
+            dom.deviceSelect.innerHTML = '<option value="">-- 기기를 선택하세요 --</option>';
+            onlineDevices.forEach(d => {
+                const option = document.createElement('option');
+                option.value = d.device_id;
+                option.textContent = d.device_id;
+                dom.deviceSelect.appendChild(option);
             });
-            if (changed) updateDeviceDropdown();
+            // 이전 선택 유지
+            if (onlineDevices.some(d => d.device_id === prevSelected)) {
+                dom.deviceSelect.value = prevSelected;
+            }
         }
-        setInterval(checkDevicesStatus, 10000); // 10초마다 오프라인 체크
 
+        function selectDevice(deviceId) {
+            currentDevice = deviceId;
+            if (deviceId) {
+                dom.detailsPanel.style.display = 'block';
+                dom.controlsContainer.style.display = 'grid';
+                updateUIForSelectedDevice();
+                clearChart();
+                // 새 기기 선택 시 데이터 즉시 요청
+                publishCommand({ status: "request" });
+            } else {
+                dom.detailsPanel.style.display = 'none';
+                dom.controlsContainer.style.display = 'none';
+                clearUI();
+            }
+        }
 
+        function updateUIForSelectedDevice() {
+            const device = devices[currentDevice];
+            if (!device) return;
+
+            dom.detailsId.textContent = device.device_id;
+            dom.detailsIp.textContent = device.ip || 'N/A';
+            dom.detailsMode.textContent = device.mode === 'auto' ? '자동' : '수동';
+            dom.detailsStatus.textContent = device.online ? '온라인' : '오프라인';
+            dom.detailsStatus.className = 'status-badge ' + (device.online ? 'online' : 'offline');
+            
+            dom.temperature.textContent = `${(device.temperature || 0).toFixed(1)}°C`;
+            dom.humidity.textContent = `${(device.humidity || 0).toFixed(1)}%`;
+            
+            if (device.rgb) {
+                dom.rgbRed.value = device.rgb[0];
+                dom.rgbGreen.value = device.rgb[1];
+                dom.rgbBlue.value = device.rgb[2];
+                updateRgbPreview();
+            }
+        }
+
+        function clearUI() {
+            dom.temperature.textContent = '--°C';
+            dom.humidity.textContent = '--%';
+            clearChart();
+        }
+
+        function updateRgbPreview() {
+            const r = dom.rgbRed.value, g = dom.rgbGreen.value, b = dom.rgbBlue.value;
+            dom.rgbRedValue.textContent = r;
+            dom.rgbGreenValue.textContent = g;
+            dom.rgbBlueValue.textContent = b;
+            dom.rgbPreview.style.backgroundColor = `rgb(${r},${g},${b})`;
+        }
+        
+        // --- 차트 로직 ---
         function initChart() {
             const ctx = document.getElementById('sensorChart').getContext('2d');
             sensorChart = new Chart(ctx, {
                 type: 'line',
-                data: chartData,
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        y: {
-                            beginAtZero: false,
-                            min: -20,
-                            max: 100,
-                            ticks: { stepSize: 10, color: '#555' },
-                            grid: { color: 'rgba(0,0,0,0.05)' }
-                        },
-                        x: {
-                            ticks: { maxRotation: 0, minRotation: 0, autoSkip: true, maxTicksLimit: 10, color: '#555' },
-                            grid: { display: false }
-                        }
-                    },
-                    plugins: {
-                        legend: { display: true, labels: { color: '#333', usePointStyle: true, padding: 15 } },
-                        tooltip: {
-                            backgroundColor: 'rgba(0,0,0,0.8)',
-                            titleColor: '#fff',
-                            bodyColor: '#fff',
-                            padding: 10,
-                            boxPadding: 5
-                        }
-                    }
-                }
+                data: { labels: [], datasets: [
+                    { label: '온도 (°C)', data: [], borderColor: '#ff6384', tension: 0.1, fill: false },
+                    { label: '습도 (%)', data: [], borderColor: '#36a2eb', tension: 0.1, fill: false }
+                ]},
+                options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: false } } }
             });
         }
-
+        
         function updateChart(data) {
-            if (!sensorChart || currentDevice !== data.device_id) return;
+            const label = new Date(data.timestamp * 1000).toLocaleTimeString();
+            sensorChart.data.labels.push(label);
+            sensorChart.data.datasets[0].data.push(data.temperature);
+            sensorChart.data.datasets[1].data.push(data.humidity);
 
-            const timeLabel = new Date(data.timestamp * 1000).toLocaleTimeString('ko-KR');
-
-            if (data.temperature !== undefined && data.temperature !== null) {
-                chartData.datasets[0].data.push(data.temperature);
+            if (sensorChart.data.labels.length > MAX_CHART_POINTS) {
+                sensorChart.data.labels.shift();
+                sensorChart.data.datasets.forEach(dataset => dataset.data.shift());
             }
-            if (data.humidity !== undefined && data.humidity !== null) {
-                chartData.datasets[1].data.push(data.humidity);
-            }
-            
-            // 레이블은 데이터셋 중 하나라도 데이터가 있을 때 추가
-            if ((data.temperature !== undefined && data.temperature !== null) || (data.humidity !== undefined && data.humidity !== null)) {
-                chartData.labels.push(timeLabel);
-            }
-
-
-            while (chartData.labels.length > MAX_CHART_POINTS) {
-                chartData.labels.shift();
-                if(chartData.datasets[0].data.length > MAX_CHART_POINTS) chartData.datasets[0].data.shift();
-                if(chartData.datasets[1].data.length > MAX_CHART_POINTS) chartData.datasets[1].data.shift();
-            }
-            sensorChart.update('none'); // 애니메이션 없이 업데이트
+            sensorChart.update('none');
         }
 
         function clearChart() {
-            chartData.labels = [];
-            chartData.datasets[0].data = [];
-            chartData.datasets[1].data = [];
-            if (sensorChart) sensorChart.update();
+            sensorChart.data.labels = [];
+            sensorChart.data.datasets.forEach(dataset => dataset.data = []);
+            sensorChart.update();
         }
 
-        function updateSensorValues(data) {
-            updateElementText(dom.temperature, data.temperature !== undefined && data.temperature !== null ? `${data.temperature.toFixed(1)} °C` : '-- °C');
-            updateElementText(dom.humidity, data.humidity !== undefined && data.humidity !== null ? `${data.humidity.toFixed(1)} %` : '-- %');
-            updateElementText(dom.touchCount1, data.touch_count1, '0');
-            updateElementText(dom.touchCount2, data.touch_count2, '0');
-            updateElementText(dom.touchCount3, data.touch_count3, '0');
-            updateElementText(dom.touchCount4, data.touch_count4, '0');
-        }
-
-        function publishMessage(payload) {
-            if (!client || !client.isConnected()) {
-                alert("MQTT 브로커에 연결되어 있지 않습니다."); return;
-            }
-            if (!currentDevice) {
-                alert("먼저 제어할 기기를 선택해주세요."); return;
-            }
-            const topic = `myhome/livingroom/${currentDevice}/command`;
-            const messageStr = JSON.stringify(payload);
-            const mqttMessage = new Paho.MQTT.Message(messageStr);
-            mqttMessage.destinationName = topic;
-            client.send(mqttMessage);
-            console.log("Publish:", topic, messageStr);
-        }
-
-        function updateRgbPreview() {
-            const r = dom.rgbRed.value;
-            const g = dom.rgbGreen.value;
-            const b = dom.rgbBlue.value;
-            updateElementText(dom.rgbRedValue, r);
-            updateElementText(dom.rgbGreenValue, g);
-            updateElementText(dom.rgbBlueValue, b);
-            dom.rgbPreview.style.backgroundColor = `rgb(${r}, ${g}, ${b})`;
-        }
-
-        function updateLcdPreview(line1 = "", line2 = "") {
-            updateElementText(dom.lcdPreviewLine1, line1.substring(0, 16));
-            updateElementText(dom.lcdPreviewLine2, line2.substring(0, 16));
-        }
-
-        // --- MQTT 콜백 ---
-        function onConnect() {
-            updateConnectionStatus("MQTT 연결 성공!", true);
-            client.subscribe(MQTT_TOPIC_SENSOR_WILDCARD);
-            console.log("Subscribed to:", MQTT_TOPIC_SENSOR_WILDCARD);
-            // 초기 기기 목록 로드를 위해 빈 메시지 publish (브로커 retain 활용 시 불필요)
-            // client.publish("myhome/livingroom/discover", ""); // 또는 특정 토픽
-        }
-
-        function onConnectFailure(response) {
-            updateConnectionStatus(`MQTT 연결 실패: ${response.errorMessage}`, false, true);
-            setTimeout(connectMQTT, 5000);
-        }
-
-        function onConnectionLost(response) {
-            if (response.errorCode !== 0) {
-                updateConnectionStatus(`MQTT 연결 끊김: ${response.errorMessage}`, false);
-                // 연결 끊김 시 모든 기기 오프라인 처리
-                Object.keys(devices).forEach(id => { devices[id].online = false; });
+        // --- 오프라인 기기 체크 ---
+        setInterval(() => {
+            let changed = false;
+            Object.keys(devices).forEach(id => {
+                if (devices[id].online && (Date.now() - devices[id].lastSeen > DEVICE_TIMEOUT * 1000)) {
+                    devices[id].online = false;
+                    changed = true;
+                }
+            });
+            if (changed) {
                 updateDeviceDropdown();
-                if (currentDevice) updateSelectedDeviceUI();
+                if(currentDevice && !devices[currentDevice].online) updateUIForSelectedDevice();
             }
-            setTimeout(connectMQTT, 3000); // 재연결 시도 간격 조정
-        }
-
-        function onMessageArrived(message) {
-            console.log(`Msg RX [${message.destinationName}]: ${message.payloadString}`);
-            try {
-                const data = JSON.parse(message.payloadString);
-                const topicParts = message.destinationName.split('/');
-                const deviceIdFromTopic = topicParts[2];
-                const receivedDeviceId = data.device_id || deviceIdFromTopic;
-
-                if (!receivedDeviceId) {
-                    console.warn("Device ID missing in received message:", message.destinationName);
-                    return;
-                }
-                data.device_id = receivedDeviceId; // Ensure data object has device_id
-
-                addDevice(receivedDeviceId, data);
-
-                if (receivedDeviceId === currentDevice) {
-                    updateSensorValues(data);
-                    updateChart(data);
-                    updateSelectedDeviceUI(); // RGB, Servo UI 업데이트
-                }
-            } catch (e) {
-                console.error("Error processing MQTT message:", e, message.payloadString);
-            }
-        }
-
-        // --- MQTT 연결 시작 ---
-        function connectMQTT() {
-            updateConnectionStatus("MQTT 연결 중...", null);
-            console.log(`MQTT 연결 시도: ${MQTT_BROKER}:${MQTT_PORT}, ID: ${MQTT_CLIENT_ID}`);
-            
-            try {
-                client = new Paho.MQTT.Client(MQTT_BROKER, MQTT_PORT, MQTT_CLIENT_ID);
-                client.onConnectionLost = onConnectionLost;
-                client.onMessageArrived = onMessageArrived;
-                
-                // 연결 옵션 설정 (유효한 옵션만 포함)
-                const options = {
-                    onSuccess: onConnect,
-                    onFailure: onConnectFailure,
-                    timeout: 15, // 연결 타임아웃 증가
-                    keepAliveInterval: 30, // 30초마다 핑
-                    cleanSession: true,
-                    useSSL: true, // SSL 사용 (보안 연결)
-                    mqttVersion: 4 // MQTT 버전 4 사용
-                };
-                
-                console.log("MQTT 연결 옵션:", options);
-                client.connect(options);
-            } catch (err) {
-                console.error("MQTT 연결 오류:", err);
-                updateConnectionStatus("MQTT 연결 오류: " + err.message, false, true);
-            }
-        }
-
-        // --- 이벤트 리스너 바인딩 ---
-        window.onload = function() {
-            console.log("페이지 로딩 완료");
+        }, 5000);
+        
+        // --- 이벤트 리스너 설정 ---
+        window.onload = () => {
             initChart();
-            
-            // DOM 요소 초기화 확인
-            console.log("DOM 요소 초기화 상태:", dom);
-            
-            // 컨트롤 UI 표시 상태 확인
-            const deviceControls = document.getElementById('device-controls');
-            console.log("제어 UI 초기 표시 상태:", deviceControls.style.display);
-            
-            // UI 초기화
-            updateSelectedDeviceUI(); // 초기 UI 상태
-            updateDeviceDropdown(); // 초기 드롭다운
-            
-            // MQTT 연결 시작
             connectMQTT();
+            
+            dom.deviceSelect.addEventListener('change', (e) => selectDevice(e.target.value));
 
-            dom.deviceSelect.addEventListener('change', function() {
-                selectDevice(this.value);
-            });
+            document.getElementById('mode-auto-btn').addEventListener('click', () => publishCommand({ mode: 'auto' }));
+            document.getElementById('mode-manual-btn').addEventListener('click', () => publishCommand({ mode: 'manual' }));
 
-            // 서보 제어를 위한 변수
-            let servoDebounceTimer = null; // 디바운싱을 위한 타이머
-            let currentServoValue = 90; // 현재 서보 값
-            let targetServoValue = 90; // 목표 서보 값
-            let servoAnimationFrame = null; // 애니메이션 프레임
+            document.getElementById('window-open-btn').addEventListener('click', () => publishCommand({ servo: 90 }));
+            document.getElementById('window-close-btn').addEventListener('click', () => publishCommand({ servo: 0 }));
             
-            // 서보 값 전송 함수 (디바운싱 및 속도 제한 적용)
-            function sendServoValue(value) {
-                // 기존 타이머 취소
-                if (servoDebounceTimer) {
-                    clearTimeout(servoDebounceTimer);
-                }
-                
-                // 값 업데이트
-                targetServoValue = value;
-                
-                // 디바운싱 타이머 설정 (200ms)
-                servoDebounceTimer = setTimeout(() => {
-                    // 애니메이션 프레임이 있으면 취소
-                    if (servoAnimationFrame) {
-                        cancelAnimationFrame(servoAnimationFrame);
-                    }
-                    
-                    // 서보 애니메이션 시작
-                    animateServo();
-                }, 200); // 200ms 디바운싱
-            }
-            
-            // 서보 애니메이션 함수 (부드럽게 이동)
-            function animateServo() {
-                // 현재 값과 목표 값의 차이
-                const diff = targetServoValue - currentServoValue;
-                
-                // 이미 목표에 도달했으면 중단
-                if (Math.abs(diff) < 0.5) {
-                    currentServoValue = targetServoValue;
-                    publishMessage({ servo: currentServoValue });
-                    return;
-                }
-                
-                // 한 번에 최대 2도씩만 이동 (속도 제한)
-                const step = Math.sign(diff) * Math.min(2, Math.abs(diff));
-                currentServoValue += step;
-                
-                // 서보 값 전송
-                publishMessage({ servo: Math.round(currentServoValue) });
-                
-                // 다음 프레임 예약 (100ms 간격)
-                servoAnimationFrame = setTimeout(() => {
-                    animateServo();
-                }, 100);
-            }
-            
-            // 서보 슬라이더 이벤트 - 값 표시 및 입력 필드 동기화
-            dom.servoControl.addEventListener('input', () => {
-                const value = parseInt(dom.servoControl.value);
-                dom.servoValue.textContent = value + '°';
-                dom.servoInput.value = value; // 입력 필드도 동기화
-                
-                // 디바운싱 적용하여 서보 값 전송
-                sendServoValue(value);
-            });
-            
-            // 서보 입력 필드 이벤트 - 값 변경 시 슬라이더 동기화
-            dom.servoInput.addEventListener('input', () => {
-                let value = parseInt(dom.servoInput.value);
-                
-                // 범위 제한 (0-180)
-                if (isNaN(value)) {
-                    value = 90; // 유효하지 않은 값이면 기본값으로
-                } else {
-                    value = Math.max(0, Math.min(180, value));
-                }
-                
-                dom.servoInput.value = value; // 범위 제한된 값으로 업데이트
-                dom.servoControl.value = value; // 슬라이더 동기화
-                dom.servoValue.textContent = value + '°';
-                
-                // 입력 필드에서도 디바운싱 적용
-                sendServoValue(value);
-            });
-            
-            // 서보 위치 설정 버튼 이벤트 - 즉시 이동 (부드럽게 이동하지 않음)
-            dom.servoSend.addEventListener('click', () => {
-                const value = parseInt(dom.servoInput.value); // 입력 필드의 값 사용
-                
-                // 현재 값과 목표 값 업데이트 (애니메이션 없이 즉시 전송)
-                currentServoValue = value;
-                targetServoValue = value;
-                
-                // 디바운싱 타이머 취소
-                if (servoDebounceTimer) {
-                    clearTimeout(servoDebounceTimer);
-                    servoDebounceTimer = null;
-                }
-                
-                // 애니메이션 프레임 취소
-                if (servoAnimationFrame) {
-                    clearTimeout(servoAnimationFrame);
-                    servoAnimationFrame = null;
-                }
-                
-                // 즉시 서보 값 전송
-                publishMessage({ servo: value });
-                setButtonFeedback(dom.servoSend, '전송 완료!');
-            });
-
-            [dom.rgbRed, dom.rgbGreen, dom.rgbBlue].forEach(slider => {
-                slider.addEventListener('input', updateRgbPreview);
-            });
-            dom.rgbSend.addEventListener('click', () => {
-                publishMessage({
-                    rgb: [parseInt(dom.rgbRed.value), parseInt(dom.rgbGreen.value), parseInt(dom.rgbBlue.value)]
-                });
-                setButtonFeedback(dom.rgbSend);
-            });
-            dom.presetColors.forEach(btn => {
-                btn.addEventListener('click', function() {
-                    const color = JSON.parse(this.dataset.color);
-                    dom.rgbRed.value = color[0];
-                    dom.rgbGreen.value = color[1];
-                    dom.rgbBlue.value = color[2];
-                    updateRgbPreview();
-                    publishMessage({ rgb: color });
+            [dom.rgbRed, dom.rgbGreen, dom.rgbBlue].forEach(el => {
+                el.addEventListener('input', updateRgbPreview);
+                el.addEventListener('change', () => { // 슬라이더 놓았을 때만 전송
+                     publishCommand({ rgb: [parseInt(dom.rgbRed.value), parseInt(dom.rgbGreen.value), parseInt(dom.rgbBlue.value)] });
                 });
             });
 
-            dom.lcdSend.addEventListener('click', () => {
+            document.getElementById('lcd-send-btn').addEventListener('click', () => {
                 const text = dom.lcdText.value;
-                if (text.trim() === "") return; // 빈 텍스트 무시
-                updateLcdPreview(text);
-                publishMessage({ lcd: text }); // ESP32에서 단일 문자열 처리 가정
-                dom.lcdText.value = "";
-                setButtonFeedback(dom.lcdSend);
-            });
-            dom.lcdTwoLinesSend.addEventListener('click', () => {
-                const line1 = dom.lcdLine1Input.value;
-                const line2 = dom.lcdLine2Input.value;
-                if (line1.trim() === "" && line2.trim() === "") return; // 빈 텍스트 무시
-                updateLcdPreview(line1, line2);
-                publishMessage({ lcd: { line1: line1, line2: line2 } });
-                dom.lcdLine1Input.value = "";
-                dom.lcdLine2Input.value = "";
-                setButtonFeedback(dom.lcdTwoLinesSend);
-            });
-            
-            // LCD 입력 시 실시간 미리보기
-            [dom.lcdText, dom.lcdLine1Input, dom.lcdLine2Input].forEach(input => {
-                input.addEventListener('input', function() {
-                    if (this.id === 'lcd-text') {
-                         const textVal = this.value;
-                         if (textVal.includes('\n')) {
-                             const lines = textVal.split('\n', 2);
-                             updateLcdPreview(lines[0], lines[1]);
-                         } else if (textVal.length > 16) {
-                             updateLcdPreview(textVal.substring(0,16), textVal.substring(16,32));
-                         } else {
-                             updateLcdPreview(textVal);
-                         }
-                    } else { // lcd-line1-input 또는 lcd-line2-input
-                        updateLcdPreview(dom.lcdLine1Input.value, dom.lcdLine2Input.value);
-                    }
-                });
+                if(text) publishCommand({ lcd: text });
             });
 
-
-            dom.pianoKeys.forEach(key => {
-                key.addEventListener('click', function() {
-                    const freq = parseInt(this.dataset.freq);
-                    const duration = parseInt(dom.buzzerDuration.value);
-                    publishMessage({ buzzer: { freq: freq, duration: duration } });
+            document.querySelectorAll('.piano-key').forEach(key => {
+                key.addEventListener('click', () => {
+                    const freq = parseInt(key.dataset.freq);
+                    publishCommand({ buzzer: { freq: freq, duration: 200 } });
                 });
-            });
-            dom.buzzerCustomPlay.addEventListener('click', function() {
-                const freq = parseInt(dom.buzzerFrequency.value);
-                const duration = parseInt(dom.buzzerDuration.value);
-                publishMessage({ buzzer: { freq: freq, duration: duration } });
-            });
-            dom.buzzerStopBtn.addEventListener('click', () => {
-                publishMessage({ buzzer: 0 }); // 주파수 0으로 정지
-                setButtonFeedback(dom.buzzerStopBtn, "정지됨", true, 500);
             });
         };
     </script>
